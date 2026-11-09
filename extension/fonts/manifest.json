@@ -1,0 +1,114 @@
+{
+  "family": "Noto Sans",
+  "license": "SIL OFL 1.1 for Noto only; proprietary Windows faces: see FONT-SOURCES.md",
+  "repository": "https://github.com/notofonts/noto-fonts",
+  "revision": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+  "sourceBase": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac",
+  "files": [
+    {
+      "file": "NotoSans-Regular.ttf",
+      "sha256": "b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5",
+      "bytes": 569208
+    },
+    {
+      "file": "NotoSans-Bold.ttf",
+      "sha256": "c976e4b1b99edc88775377fcc21692ca4bfa46b6d6ca6522bfda505b28ff9d6a",
+      "bytes": 575740
+    },
+    {
+      "file": "OFL.txt",
+      "sha256": "0dab92d0544f7b233403f14b84a663bdbfa746982eda629e7f4f9ffe1b036feb",
+      "bytes": 4377
+    },
+    {
+      "file": "NotoSerif-Regular.ttf",
+      "sha256": "c8f669ceb2c9c60ccf55198b305e08a997ffca79a38cc7eeb551e643cbe66505",
+      "bytes": 616196
+    },
+    {
+      "file": "NotoSerif-Bold.ttf",
+      "sha256": "3b2086a869bcded2aeb4416fc281ceec9d6ce3c06756cda19f8f763636204e7d",
+      "bytes": 638164
+    },
+    {
+      "file": "TimesNewRoman-Regular.ttf",
+      "sha256": "931c5de5c70401d9324d5014c123802b4fb753000360ceb2f56c589403cd58c5",
+      "bytes": 1190736,
+      "family": "Times New Roman",
+      "weight": "Regular",
+      "source": "C:/Windows/Fonts/times.ttf",
+      "license": "Proprietary Windows font; not covered by OFL.txt. See FONT-SOURCES.md."
+    },
+    {
+      "file": "TimesNewRoman-Bold.ttf",
+      "sha256": "54fbe2c70af7c85a97bed0573227e3ccc4b2486012e3ca2a40c6bc77065846f5",
+      "bytes": 1170096,
+      "family": "Times New Roman",
+      "weight": "Bold",
+      "source": "C:/Windows/Fonts/timesbd.ttf",
+      "license": "Proprietary Windows font; not covered by OFL.txt. See FONT-SOURCES.md."
+    },
+    {
+      "file": "CourierNew-Regular.ttf",
+      "sha256": "e4a66a0259718d0c8f4b6e14319b4803ced45afbddf3abba8b8c3e2006856206",
+      "bytes": 817164,
+      "family": "Courier New",
+      "weight": "Regular",
+      "source": "C:/Windows/Fonts/cour.ttf",
+      "license": "Proprietary Windows font; not covered by OFL.txt. See FONT-SOURCES.md."
+    },
+    {
+      "file": "CourierNew-Bold.ttf",
+      "sha256": "11e629cef937cd08f942aa1bd994a71302dbe2819c72c6d4c183a623acbb421a",
+      "bytes": 818292,
+      "family": "Courier New",
+      "weight": "Bold",
+      "source": "C:/Windows/Fonts/courbd.ttf",
+      "license": "Proprietary Windows font; not covered by OFL.txt. See FONT-SOURCES.md."
+    },
+    {
+      "file": "SegoeUI-Regular.ttf",
+      "sha256": "704eada12961a27fd271f7d3b09e2066520e758390c1776744eff430fee30f6e",
+      "bytes": 960076,
+      "family": "Segoe UI",
+      "weight": "Regular",
+      "source": "C:/Windows/Fonts/segoeui.ttf",
+      "license": "Proprietary Windows font; not covered by OFL.txt. See FONT-SOURCES.md."
+    },
+    {
+      "file": "SegoeUI-Bold.ttf",
+      "sha256": "b169e636719880976a97e94e3b1cb3dbe5f4a38eabc037bf9f2a9165154c3ad2",
+      "bytes": 947364,
+      "family": "Segoe UI",
+      "weight": "Bold",
+      "source": "C:/Windows/Fonts/segoeuib.ttf",
+      "license": "Proprietary Windows font; not covered by OFL.txt. See FONT-SOURCES.md."
+    },
+    {
+      "file": "Verdana-Regular.ttf",
+      "sha256": "6a8481fe107ee547893c018b13dba291c2020bec3de5da6525d9ac09f6bc2105",
+      "bytes": 243304,
+      "family": "Verdana",
+      "weight": "Regular",
+      "source": "C:/Windows/Fonts/verdana.ttf",
+      "license": "Proprietary Windows font; not covered by OFL.txt. See FONT-SOURCES.md."
+    },
+    {
+      "file": "Verdana-Bold.ttf",
+      "sha256": "f3245f5f38f61bd1ceefb0f1338a5b88a21e6220832c2f43a38bbc7e1547c36f",
+      "bytes": 211260,
+      "family": "Verdana",
+      "weight": "Bold",
+      "source": "C:/Windows/Fonts/verdanab.ttf",
+      "license": "Proprietary Windows font; not covered by OFL.txt. See FONT-SOURCES.md."
+    }
+  ],
+  "families": [
+    "Noto Sans",
+    "Noto Serif",
+    "Times New Roman",
+    "Courier New",
+    "Segoe UI",
+    "Verdana"
+  ]
+}

@@ -1,0 +1,66 @@
+:root {
+  color-scheme: light;
+  --color-ink: #182339; --color-muted: #5c687e; --color-line: #e2e7ef;
+  --color-surface: #fff; --color-canvas: #f5f6fa; --color-accent: #4f46e5;
+  --color-accent-soft: #eeedff; --radius-control: .5rem; --radius-panel: .875rem;
+  --color-button-fill: #eef2f8; --color-button-border: #8290a6;
+  --color-button-hover: #e3e7fb; --color-button-pressed: #d4daf5;
+  --color-accent-solid: #4f46e5; --color-accent-hover: #4338ca; --color-accent-pressed: #3730a3; --color-on-accent: #fff;
+  --color-accordion-open: #f1f3fa; --color-accordion-body: #f8f9fd;
+  --color-danger-ink: #b42318; --color-danger-fill: #fff1f0; --color-danger-border: #e7a5a0; --color-danger-hover: #ffe4e0; --color-danger-pressed: #ffd2ca;
+  --color-disabled-fill: #e5e9f0; --color-disabled-ink: #526078; --color-disabled-border: #a1adbd;
+  --shadow-panel: 0 2px 6px #18233904;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--color-ink); background: var(--color-canvas); line-height: 1.55;
+}
+
+:root {
+ --color-field: var(--color-surface); --color-field-line: var(--color-line);
+ --web-ink: var(--color-ink); --web-muted: var(--color-muted); --web-line: var(--color-line);
+ --web-accent: var(--color-accent-solid); --web-soft: var(--color-accent-soft); --web-canvas: var(--color-canvas);
+ --background: var(--color-canvas); --foreground: var(--color-ink);
+ --card: var(--color-surface); --card-foreground: var(--color-ink); --popover: var(--color-surface); --popover-foreground: var(--color-ink);
+ --primary: var(--color-accent-solid); --primary-foreground: var(--color-on-accent);
+ --secondary: var(--color-button-fill); --secondary-foreground: var(--color-ink);
+ --muted: var(--color-canvas); --muted-foreground: var(--color-muted); --accent: var(--color-accent-soft); --accent-foreground: var(--color-accent);
+ --border: var(--color-line); --input: var(--color-field-line); --ring: var(--color-accent);
+ --destructive: var(--color-danger-ink); --destructive-foreground: var(--color-on-accent);
+ --sidebar: var(--color-surface); --sidebar-foreground: var(--color-ink); --sidebar-border: var(--color-line);
+}
+:root[data-theme="dark"] { --web-accent: var(--color-accent); }
+body { background: var(--color-canvas); color: var(--color-ink); }
+.web-theme-control { position: relative; flex: none; }
+.web-theme-toggle { display: grid; place-items: center; width: 32px; height: 32px; padding: 6px; border: 1px solid var(--color-button-border); border-radius: 7px; color: var(--color-ink); background: var(--color-button-fill); cursor: pointer; }
+.web-theme-toggle svg { width: 18px; height: 18px; }
+.web-theme-toggle:hover { color: var(--color-accent); background: var(--color-button-hover); }
+.web-theme-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.web-theme-error { position: absolute; right: 0; top: 38px; z-index: 70; width: 240px; padding: 10px; border: 1px solid var(--color-danger-border); border-radius: 7px; background: var(--color-danger-fill); color: var(--color-danger-ink); font-size: 12px; }
+.autofill-options { --primary: var(--color-accent-solid); --primary-foreground: var(--color-on-accent); --accent-foreground: var(--color-accent); }
+.web-button-primary,.prompt-settings .button-primary { color: var(--color-on-accent); background: var(--color-accent-solid); border-color: var(--color-accent-solid); }
+.web-button-primary:hover:enabled { color: var(--color-on-accent); background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+.prompt-message { background: var(--color-accent-soft); color: var(--color-ink); border-color: var(--color-line); }
+.prompt-message.prompt-message-error { background: var(--color-danger-fill); color: var(--color-danger-ink); border-color: var(--color-danger-border); }
+[data-theme="dark"] .prompt-message.prompt-message-success { background: #153b30; color: #9ddac1; border-color: #32654e; }
+[data-theme="dark"] .prompt-settings .button-danger { color: var(--color-danger-ink); background: var(--color-danger-fill); border-color: var(--color-danger-border); }
+/* Shared web feedback and controls retain readable text in either theme. */
+.web-message { color: var(--color-ink); background: var(--color-accent-soft); border-color: var(--color-line); }
+.web-message.web-error { color: var(--color-danger-ink); background: var(--color-danger-fill); border-color: var(--color-danger-border); }
+.web-button-primary,.prompt-settings .button-primary { color: var(--color-on-accent); background: var(--color-accent-solid); border-color: var(--color-accent-solid); }
+.web-button-primary:hover:enabled,.prompt-settings .button-primary:hover:enabled { color: var(--color-on-accent); background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+.autofill-options :is(input,textarea,select)::placeholder { color: var(--color-muted); opacity: 1; }
+:root { --chart-1: var(--color-accent-solid); }
+/* Chrome's native dashboard uses the original dimensions and CSS unchanged. */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-ink: #e5eaf3; --color-muted: #a5b2c6; --color-line: #334155;
+  --color-surface: #151f31; --color-canvas: #0c1220; --color-accent: #b3abff;
+  --color-accent-soft: #292442; --color-field: #101929; --color-field-line: #45546c;
+  --color-accordion-open: #243149; --color-accordion-body: #101a2b;
+  --color-danger-ink: #ffb4ab; --color-danger-fill: #3c222a; --color-danger-border: #9f5861; --color-danger-hover: #512c35; --color-danger-pressed: #633340;
+  --color-button-fill: #24344c; --color-button-border: #7788a3;
+  --color-button-hover: #303a58; --color-button-pressed: #3b4465;
+  --color-accent-solid: #6558e8; --color-accent-hover: #7162ed; --color-accent-pressed: #5344ca;
+  --color-disabled-fill: #253047; --color-disabled-ink: #a5b2c6; --color-disabled-border: #53627c;
+  --shadow-panel: 0 2px 6px #0002;
+}

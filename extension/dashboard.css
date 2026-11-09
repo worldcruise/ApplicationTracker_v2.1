@@ -1,0 +1,139 @@
+/* Original reference styles; local light palette follows. */
+
+    #at-reference-dock{--rd-bg:#121213;--rd-panel:#202022;--rd-line:#323035;--rd-text:#efedf2;--rd-muted:#a19ba6;--rd-purple:#a18af0;--rd-green:#57cfa5;--rd-orange:#f29a55;--rd-cyan:#69c5df;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;line-height:1.45;padding:14px 10px;color:var(--rd-text)}
+    #at-reference-dock *{box-sizing:border-box}
+    #at-reference-dock [hidden]{display:none!important}
+    #at-reference-dock button,#at-reference-dock select{font:inherit}
+    #at-reference-dock button{color:inherit;font-weight:500}
+    #at-reference-dock button:focus-visible,#at-reference-dock select:focus-visible{outline:2px solid var(--rd-purple);outline-offset:3px}
+    #at-reference-dock .rd-dock{width:100%;max-width:350px;margin:0 auto;background:var(--rd-bg);border:1px solid #2c292f;border-radius:12px;overflow:clip;color-scheme:dark}
+    #at-reference-dock .rd-header{height:53px;display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 13px;border-bottom:1px solid #262428}
+    #at-reference-dock .rd-brand{display:flex;align-items:center;gap:7px;min-width:0}
+    #at-reference-dock .rd-logo{height:24px;width:24px;border-radius:7px;background:#7752d8;display:grid;place-items:center;color:#f6f1ff;flex-shrink:0}
+    #at-reference-dock .rd-logo svg{width:15px;height:15px}
+    #at-reference-dock .rd-brand-name{font-size:13px;letter-spacing:-.3px;font-weight:500;white-space:nowrap}
+    #at-reference-dock .rd-person{display:flex;align-items:center;gap:5px;min-width:0}
+    #at-reference-dock .rd-avatar{height:24px;width:24px;border-radius:50%;display:grid;place-items:center;background:#794edb;color:#f5eeff;font-size:11px;flex-shrink:0}
+    #at-reference-dock .rd-select{font-size:11px;border:0;color:#c8c2ce;background:var(--rd-bg);padding:3px 1px;min-width:0;width:74px}
+    #at-reference-dock .rd-main{padding:13px 13px 0}
+    #at-reference-dock .rd-welcome{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+    #at-reference-dock .rd-welcome p{margin:0;color:var(--rd-muted);font-size:12px}
+    #at-reference-dock .rd-welcome strong{font-size:14px;color:var(--rd-text);font-weight:500;margin-left:3px}
+    #at-reference-dock .rd-refresh{height:28px;width:28px;display:grid;place-items:center;background:#1c1b1e;border:1px solid #302d33;border-radius:8px;flex-shrink:0}
+    #at-reference-dock .rd-refresh svg{width:15px;height:15px;color:var(--rd-muted)}
+    #at-reference-dock .rd-section-title{margin:0 0 8px;font-size:12px;color:var(--rd-muted);font-weight:500}
+    #at-reference-dock .rd-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:18px}
+    #at-reference-dock .rd-stat{border:1px solid #34303f;border-radius:12px;min-height:109px;padding:12px 6px 10px;display:flex;flex-direction:column;align-items:center;text-align:center}
+    #at-reference-dock .rd-stat svg{width:16px;height:16px;margin-bottom:7px}
+    #at-reference-dock .rd-stat strong{font-size:20px;line-height:1.15;font-weight:500;font-variant-numeric:tabular-nums;margin-bottom:7px}
+    #at-reference-dock .rd-stat-label{font-size:11px;line-height:1.35;color:#aca6b3;max-width:86px}
+    #at-reference-dock .rd-stat-resume{background:#211c31;border-color:#342b48;color:var(--rd-purple)}
+    #at-reference-dock .rd-stat-applications{background:#152d24;border-color:#284539;color:var(--rd-green)}
+    #at-reference-dock .rd-stat-meetings{background:#332217;border-color:#493326;color:var(--rd-orange)}
+    #at-reference-dock .rd-actions{display:grid;gap:8px;margin-bottom:18px}
+    #at-reference-dock .rd-action{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #3b2d53;border-radius:11px;min-height:42px;padding:10px 12px;text-align:left;background:#241d32}
+    #at-reference-dock .rd-action>svg:first-child{height:20px;width:20px;flex-shrink:0}
+    #at-reference-dock .rd-action-label{flex:1;font-size:13px;color:#ece8f1}
+    #at-reference-dock .rd-action>svg:last-child{height:14px;width:14px;color:#9e92ac;flex-shrink:0}
+    #at-reference-dock .rd-action-profile{background:#241e34;border-color:#3b2c55}
+    #at-reference-dock .rd-action-profile>svg:first-child{color:var(--rd-purple)}
+    #at-reference-dock .rd-action-browse{background:#301c32;border-color:#4c2751}
+    #at-reference-dock .rd-action-browse>svg:first-child{color:#d79cdb}
+    #at-reference-dock .rd-action-apply{background:#192e27;border-color:#254a3d}
+    #at-reference-dock .rd-action-apply>svg:first-child{color:var(--rd-green)}
+    #at-reference-dock .rd-action-applications{background:#192d34;border-color:#28434d}
+    #at-reference-dock .rd-action-applications>svg:first-child{color:var(--rd-cyan)}
+    #at-reference-dock .rd-action-meeting{background:#332319;border-color:#4c3526}
+    #at-reference-dock .rd-action-meeting>svg:first-child{color:var(--rd-orange)}
+    #at-reference-dock .rd-action:hover,#at-reference-dock .rd-action[aria-pressed=true]{filter:brightness(1.15)}
+    #at-reference-dock .rd-recent{border:1px solid #343136;border-radius:12px;background:var(--rd-panel);overflow:clip;margin-bottom:13px}
+    #at-reference-dock .rd-activity{width:100%;display:grid;grid-template-columns:16px minmax(0,1fr) 90px;align-items:center;gap:8px;padding:12px 11px;border:0;background:transparent;text-align:left;position:relative;min-height:53px}
+    #at-reference-dock .rd-activity:not(:last-child):after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:1px;background:#343136}
+    #at-reference-dock .rd-activity:hover,#at-reference-dock .rd-activity[aria-pressed=true]{background:#2a2630}
+    #at-reference-dock .rd-activity>svg{height:15px;width:15px}
+    #at-reference-dock .rd-activity.application>svg{color:var(--rd-green)}
+    #at-reference-dock .rd-activity.meeting>svg{color:var(--rd-orange)}
+    #at-reference-dock .rd-activity.profile>svg{color:var(--rd-purple)}
+    #at-reference-dock .rd-activity-copy{display:grid;gap:1px;min-width:0}
+    #at-reference-dock .rd-activity-title{font-size:12px;font-weight:500;color:#f0edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #at-reference-dock .rd-activity-company{font-size:11px;color:var(--rd-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
+    #at-reference-dock .rd-time{font-size:11px;color:var(--rd-muted);white-space:nowrap;font-weight:400;text-align:right}
+    #at-reference-dock .rd-feedback{margin:0 13px 13px;padding:9px 10px;background:#26202f;border:1px solid #423350;border-radius:8px;font-size:11px;color:#d3c5e8}
+    @media(max-width:370px){#at-reference-dock{padding:10px 3px}#at-reference-dock .rd-header{padding-left:11px;padding-right:10px}#at-reference-dock .rd-brand{gap:6px}#at-reference-dock .rd-brand-name{font-size:12px}#at-reference-dock .rd-select{width:68px;font-size:11px}#at-reference-dock .rd-main{padding-left:11px;padding-right:11px}#at-reference-dock .rd-stat{padding-left:5px;padding-right:5px;min-height:113px}#at-reference-dock .rd-stat-label{font-size:11px}#at-reference-dock .rd-activity{grid-template-columns:15px minmax(0,1fr) 83px;gap:7px;padding-left:10px;padding-right:10px}#at-reference-dock .rd-time{font-size:11px}}
+    @media(pointer:coarse){#at-reference-dock .rd-action,#at-reference-dock .rd-activity,#at-reference-dock .rd-refresh,#at-reference-dock .rd-select{min-height:44px}#at-reference-dock .rd-refresh{width:36px}}
+  
+
+    html[data-theme="light"] #at-reference-dock{--rd-bg:#f7f7fa;--rd-panel:#ffffff;--rd-line:#e2dfe7;--rd-text:#28232e;--rd-muted:#766d7f;--rd-purple:#7958c8;--rd-green:#226f56;--rd-orange:#92501c;--rd-cyan:#286d84;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;line-height:1.45;padding:14px 10px;color:var(--rd-text)}
+    html[data-theme="light"] #at-reference-dock *{box-sizing:border-box}
+    html[data-theme="light"] #at-reference-dock [hidden]{display:none!important}
+    html[data-theme="light"] #at-reference-dock button,html[data-theme="light"] #at-reference-dock select{font:inherit}
+    html[data-theme="light"] #at-reference-dock button{color:inherit;font-weight:500}
+    html[data-theme="light"] #at-reference-dock button:focus-visible,html[data-theme="light"] #at-reference-dock select:focus-visible{outline:2px solid var(--rd-purple);outline-offset:3px}
+    html[data-theme="light"] #at-reference-dock .rd-dock{width:100%;max-width:350px;margin:0 auto;background:var(--rd-bg);border:1px solid #e1dce7;border-radius:12px;overflow:clip;color-scheme:light}
+    html[data-theme="light"] #at-reference-dock .rd-header{height:53px;display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 13px;border-bottom:1px solid #ebe7ef}
+    html[data-theme="light"] #at-reference-dock .rd-brand{display:flex;align-items:center;gap:7px;min-width:0}
+    html[data-theme="light"] #at-reference-dock .rd-logo{height:24px;width:24px;border-radius:7px;background:#7752d8;display:grid;place-items:center;color:#f6f1ff;flex-shrink:0}
+    html[data-theme="light"] #at-reference-dock .rd-logo svg{width:15px;height:15px}
+    html[data-theme="light"] #at-reference-dock .rd-brand-name{font-size:13px;letter-spacing:-.3px;font-weight:500;white-space:nowrap}
+    html[data-theme="light"] #at-reference-dock .rd-person{display:flex;align-items:center;gap:5px;min-width:0}
+    html[data-theme="light"] #at-reference-dock .rd-avatar{height:24px;width:24px;border-radius:50%;display:grid;place-items:center;background:#794edb;color:#f5eeff;font-size:11px;flex-shrink:0}
+    html[data-theme="light"] #at-reference-dock .rd-select{font-size:11px;border:0;color:#5c5268;background:var(--rd-bg);padding:3px 1px;min-width:0;width:74px}
+    html[data-theme="light"] #at-reference-dock .rd-main{padding:13px 13px 0}
+    html[data-theme="light"] #at-reference-dock .rd-welcome{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+    html[data-theme="light"] #at-reference-dock .rd-welcome p{margin:0;color:var(--rd-muted);font-size:12px}
+    html[data-theme="light"] #at-reference-dock .rd-welcome strong{font-size:14px;color:var(--rd-text);font-weight:500;margin-left:3px}
+    html[data-theme="light"] #at-reference-dock .rd-refresh{height:28px;width:28px;display:grid;place-items:center;background:#f0edf4;border:1px solid #e0d9e8;border-radius:8px;flex-shrink:0}
+    html[data-theme="light"] #at-reference-dock .rd-refresh svg{width:15px;height:15px;color:var(--rd-muted)}
+    html[data-theme="light"] #at-reference-dock .rd-section-title{margin:0 0 8px;font-size:12px;color:var(--rd-muted);font-weight:500}
+    html[data-theme="light"] #at-reference-dock .rd-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:18px}
+    html[data-theme="light"] #at-reference-dock .rd-stat{border:1px solid #ded5e9;border-radius:12px;min-height:109px;padding:12px 6px 10px;display:flex;flex-direction:column;align-items:center;text-align:center}
+    html[data-theme="light"] #at-reference-dock .rd-stat svg{width:16px;height:16px;margin-bottom:7px}
+    html[data-theme="light"] #at-reference-dock .rd-stat strong{font-size:20px;line-height:1.15;font-weight:500;font-variant-numeric:tabular-nums;margin-bottom:7px}
+    html[data-theme="light"] #at-reference-dock .rd-stat-label{font-size:11px;line-height:1.35;color:#74667e;max-width:86px}
+    html[data-theme="light"] #at-reference-dock .rd-stat-resume{background:#f1ecfb;border-color:#dcd0f2;color:var(--rd-purple)}
+    html[data-theme="light"] #at-reference-dock .rd-stat-applications{background:#eaf7f0;border-color:#cee9dc;color:var(--rd-green)}
+    html[data-theme="light"] #at-reference-dock .rd-stat-meetings{background:#fff2e7;border-color:#efd8c5;color:var(--rd-orange)}
+    html[data-theme="light"] #at-reference-dock .rd-actions{display:grid;gap:8px;margin-bottom:18px}
+    html[data-theme="light"] #at-reference-dock .rd-action{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #dfd2ef;border-radius:11px;min-height:42px;padding:10px 12px;text-align:left;background:#f2ecfb}
+    html[data-theme="light"] #at-reference-dock .rd-action>svg:first-child{height:20px;width:20px;flex-shrink:0}
+    html[data-theme="light"] #at-reference-dock .rd-action-label{flex:1;font-size:13px;color:#342b40}
+    html[data-theme="light"] #at-reference-dock .rd-action>svg:last-child{height:14px;width:14px;color:#85728f;flex-shrink:0}
+    html[data-theme="light"] #at-reference-dock .rd-action-profile{background:#f1ecfb;border-color:#ddcef0}
+    html[data-theme="light"] #at-reference-dock .rd-action-profile>svg:first-child{color:var(--rd-purple)}
+    html[data-theme="light"] #at-reference-dock .rd-action-browse{background:#f9edf9;border-color:#ebd1ee}
+    html[data-theme="light"] #at-reference-dock .rd-action-browse>svg:first-child{color:#aa5faf}
+    html[data-theme="light"] #at-reference-dock .rd-action-apply{background:#eaf6ef;border-color:#cce7d8}
+    html[data-theme="light"] #at-reference-dock .rd-action-apply>svg:first-child{color:var(--rd-green)}
+    html[data-theme="light"] #at-reference-dock .rd-action-applications{background:#eaf4f8;border-color:#cde2eb}
+    html[data-theme="light"] #at-reference-dock .rd-action-applications>svg:first-child{color:var(--rd-cyan)}
+    html[data-theme="light"] #at-reference-dock .rd-action-meeting{background:#fff1e6;border-color:#efd6c0}
+    html[data-theme="light"] #at-reference-dock .rd-action-meeting>svg:first-child{color:var(--rd-orange)}
+    html[data-theme="light"] #at-reference-dock .rd-action:hover,html[data-theme="light"] #at-reference-dock .rd-action[aria-pressed=true]{filter:brightness(1.15)}
+    html[data-theme="light"] #at-reference-dock .rd-recent{border:1px solid #e4dfe9;border-radius:12px;background:var(--rd-panel);overflow:clip;margin-bottom:13px}
+    html[data-theme="light"] #at-reference-dock .rd-activity{width:100%;display:grid;grid-template-columns:16px minmax(0,1fr) 90px;align-items:center;gap:8px;padding:12px 11px;border:0;background:transparent;text-align:left;position:relative;min-height:53px}
+    html[data-theme="light"] #at-reference-dock .rd-activity:not(:last-child):after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:1px;background:#e4dfe9}
+    html[data-theme="light"] #at-reference-dock .rd-activity:hover,html[data-theme="light"] #at-reference-dock .rd-activity[aria-pressed=true]{background:#f3eef8}
+    html[data-theme="light"] #at-reference-dock .rd-activity>svg{height:15px;width:15px}
+    html[data-theme="light"] #at-reference-dock .rd-activity.application>svg{color:var(--rd-green)}
+    html[data-theme="light"] #at-reference-dock .rd-activity.meeting>svg{color:var(--rd-orange)}
+    html[data-theme="light"] #at-reference-dock .rd-activity.profile>svg{color:var(--rd-purple)}
+    html[data-theme="light"] #at-reference-dock .rd-activity-copy{display:grid;gap:1px;min-width:0}
+    html[data-theme="light"] #at-reference-dock .rd-activity-title{font-size:12px;font-weight:500;color:#332a3c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    html[data-theme="light"] #at-reference-dock .rd-activity-company{font-size:11px;color:var(--rd-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
+    html[data-theme="light"] #at-reference-dock .rd-time{font-size:11px;color:var(--rd-muted);white-space:nowrap;font-weight:400;text-align:right}
+    html[data-theme="light"] #at-reference-dock .rd-feedback{margin:0 13px 13px;padding:9px 10px;background:#f2ecfa;border:1px solid #dcd0ed;border-radius:8px;font-size:11px;color:#70528e}
+    @media(max-width:370px){html[data-theme="light"] #at-reference-dock{padding:10px 3px}html[data-theme="light"] #at-reference-dock .rd-header{padding-left:11px;padding-right:10px}html[data-theme="light"] #at-reference-dock .rd-brand{gap:6px}html[data-theme="light"] #at-reference-dock .rd-brand-name{font-size:12px}html[data-theme="light"] #at-reference-dock .rd-select{width:68px;font-size:11px}html[data-theme="light"] #at-reference-dock .rd-main{padding-left:11px;padding-right:11px}html[data-theme="light"] #at-reference-dock .rd-stat{padding-left:5px;padding-right:5px;min-height:113px}html[data-theme="light"] #at-reference-dock .rd-stat-label{font-size:11px}html[data-theme="light"] #at-reference-dock .rd-activity{grid-template-columns:15px minmax(0,1fr) 83px;gap:7px;padding-left:10px;padding-right:10px}html[data-theme="light"] #at-reference-dock .rd-time{font-size:11px}}
+    @media(pointer:coarse){html[data-theme="light"] #at-reference-dock .rd-action,html[data-theme="light"] #at-reference-dock .rd-activity,html[data-theme="light"] #at-reference-dock .rd-refresh,html[data-theme="light"] #at-reference-dock .rd-select{min-height:44px}html[data-theme="light"] #at-reference-dock .rd-refresh{width:36px}}
+  
+#at-reference-dock { --rd-soft:#1c1b1e; --rd-accent-soft:#211c31; --rd-good-soft:#152d24; --rd-warn-soft:#332217; }
+html[data-theme="light"] #at-reference-dock { --rd-soft:#f0edf4; --rd-accent-soft:#f1ecfb; --rd-good-soft:#eaf7f0; --rd-warn-soft:#fff2e7; }
+
+:root { --reference-dashboard-bg: #f7f7fa; }
+:root[data-theme="dark"] { --reference-dashboard-bg: #121213; }
+body.reference-dashboard { margin: 0; background: var(--reference-dashboard-bg); }
+#at-reference-dock .rd-empty { margin: 0; padding: 18px 11px; font-size: 12px; color: var(--rd-muted); text-align: center; }
+html[data-theme] #at-reference-dock .rd-header { height:auto; min-height:53px; flex-wrap:wrap; }
+html[data-theme] #at-reference-dock .rd-person { max-width:100%; }
+html[data-theme] #at-reference-dock .rd-select { width:auto; max-width:250px; }
+#at-reference-dock button { cursor: pointer; }
+#at-reference-dock button:disabled { cursor: wait; opacity: .6; }

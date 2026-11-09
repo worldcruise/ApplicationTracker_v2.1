@@ -1,0 +1,24 @@
+{
+  "name": "application-tracker-v2-1",
+  "version": "2.1.24",
+  "private": true,
+  "description": "Application Tracker 2.1 extension development.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:prompts": "node scripts/build-prompts.mjs",
+    "test": "node --test",
+    "check": "node scripts/check.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "version:patch": "node scripts/version.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "fake-indexeddb": "^6.2.7",
+    "happy-dom": "^21.0.4",
+    "lucide": "0.468.0"
+  }
+}

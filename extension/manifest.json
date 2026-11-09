@@ -1,0 +1,102 @@
+{
+  "action": {
+    "default_title": "Open Application Tracker 2.1 dock"
+  },
+  "author": "kirk@speedyapply.com",
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "all_frames": true,
+      "js": [
+        "content-scripts/content.js"
+      ],
+      "matches": [
+        "*://*/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "description": "Track job applications, autofill forms, and prepare tailored resumes in one workspace.",
+  "homepage_url": "https://speedyapply.com",
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "manifest_version": 3,
+  "name": "Application Tracker 2.1",
+  "options_ui": {
+    "open_in_tab": true,
+    "page": "options.html"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "tabs",
+    "contextMenus",
+    "cookies",
+    "sidePanel",
+    "downloads",
+    "activeTab",
+    "scripting",
+    "clipboardWrite",
+    "offscreen"
+  ],
+  "short_name": "Application Tracker 2.1",
+  "side_panel": {
+    "default_path": "dashboard.html"
+  },
+  "version": "2.1.24",
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "images/icon-pattern.svg"
+      ]
+    },
+    {
+      "extension_ids": [
+        "mbgjopdedgonlbpikjfibkccpmhjbnag"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "options.html"
+      ]
+    },
+    {
+      "matches": [
+        "*://*/*"
+      ],
+      "resources": [
+        "content-scripts/content.css"
+      ],
+      "use_dynamic_url": true
+    }
+  ],
+  "minimum_chrome_version": "116",
+  "incognito": "not_allowed",
+  "commands": {
+    "capture-job": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
+      "description": "Capture the current job page"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; worker-src 'self';"
+  },
+  "version_name": "2.1.24"
+}

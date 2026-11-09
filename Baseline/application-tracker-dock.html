@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Application Tracker 2.1 — Dock</title>
+  <!-- UI prototype: counts and recent activity are sample data. -->
+  <!-- Replace the action-selection handlers with your extension's real navigation. -->
+  <style>
+    html { color-scheme: dark; }
+    body { margin: 0; background: #121213; }
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+<div id="at-reference-dock">
+  <style>
+    #at-reference-dock{--rd-bg:#121213;--rd-panel:#202022;--rd-line:#323035;--rd-text:#efedf2;--rd-muted:#a19ba6;--rd-purple:#a18af0;--rd-green:#57cfa5;--rd-orange:#f29a55;--rd-cyan:#69c5df;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;line-height:1.45;padding:14px 10px;color:var(--rd-text)}
+    #at-reference-dock *{box-sizing:border-box}
+    #at-reference-dock [hidden]{display:none!important}
+    #at-reference-dock button,#at-reference-dock select{font:inherit}
+    #at-reference-dock button{color:inherit;font-weight:500}
+    #at-reference-dock button:focus-visible,#at-reference-dock select:focus-visible{outline:2px solid var(--rd-purple);outline-offset:3px}
+    #at-reference-dock .rd-dock{width:100%;max-width:350px;margin:0 auto;background:var(--rd-bg);border:1px solid #2c292f;border-radius:12px;overflow:clip;color-scheme:dark}
+    #at-reference-dock .rd-header{height:53px;display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 13px;border-bottom:1px solid #262428}
+    #at-reference-dock .rd-brand{display:flex;align-items:center;gap:7px;min-width:0}
+    #at-reference-dock .rd-logo{height:24px;width:24px;border-radius:7px;background:#7752d8;display:grid;place-items:center;color:#f6f1ff;flex-shrink:0}
+    #at-reference-dock .rd-logo svg{width:15px;height:15px}
+    #at-reference-dock .rd-brand-name{font-size:13px;letter-spacing:-.3px;font-weight:500;white-space:nowrap}
+    #at-reference-dock .rd-person{display:flex;align-items:center;gap:5px;min-width:0}
+    #at-reference-dock .rd-avatar{height:24px;width:24px;border-radius:50%;display:grid;place-items:center;background:#794edb;color:#f5eeff;font-size:11px;flex-shrink:0}
+    #at-reference-dock .rd-select{font-size:11px;border:0;color:#c8c2ce;background:var(--rd-bg);padding:3px 1px;min-width:0;width:74px}
+    #at-reference-dock .rd-main{padding:13px 13px 0}
+    #at-reference-dock .rd-welcome{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+    #at-reference-dock .rd-welcome p{margin:0;color:var(--rd-muted);font-size:12px}
+    #at-reference-dock .rd-welcome strong{font-size:14px;color:var(--rd-text);font-weight:500;margin-left:3px}
+    #at-reference-dock .rd-refresh{height:28px;width:28px;display:grid;place-items:center;background:#1c1b1e;border:1px solid #302d33;border-radius:8px;flex-shrink:0}
+    #at-reference-dock .rd-refresh svg{width:15px;height:15px;color:var(--rd-muted)}
+    #at-reference-dock .rd-section-title{margin:0 0 8px;font-size:12px;color:var(--rd-muted);font-weight:500}
+    #at-reference-dock .rd-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:18px}
+    #at-reference-dock .rd-stat{border:1px solid #34303f;border-radius:12px;min-height:109px;padding:12px 6px 10px;display:flex;flex-direction:column;align-items:center;text-align:center}
+    #at-reference-dock .rd-stat svg{width:16px;height:16px;margin-bottom:7px}
+    #at-reference-dock .rd-stat strong{font-size:20px;line-height:1.15;font-weight:500;font-variant-numeric:tabular-nums;margin-bottom:7px}
+    #at-reference-dock .rd-stat-label{font-size:11px;line-height:1.35;color:#aca6b3;max-width:86px}
+    #at-reference-dock .rd-stat-resume{background:#211c31;border-color:#342b48;color:var(--rd-purple)}
+    #at-reference-dock .rd-stat-applications{background:#152d24;border-color:#284539;color:var(--rd-green)}
+    #at-reference-dock .rd-stat-meetings{background:#332217;border-color:#493326;color:var(--rd-orange)}
+    #at-reference-dock .rd-actions{display:grid;gap:8px;margin-bottom:18px}
+    #at-reference-dock .rd-action{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #3b2d53;border-radius:11px;min-height:42px;padding:10px 12px;text-align:left;background:#241d32}
+    #at-reference-dock .rd-action>svg:first-child{height:20px;width:20px;flex-shrink:0}
+    #at-reference-dock .rd-action-label{flex:1;font-size:13px;color:#ece8f1}
+    #at-reference-dock .rd-action>svg:last-child{height:14px;width:14px;color:#9e92ac;flex-shrink:0}
+    #at-reference-dock .rd-action-profile{background:#241e34;border-color:#3b2c55}
+    #at-reference-dock .rd-action-profile>svg:first-child{color:var(--rd-purple)}
+    #at-reference-dock .rd-action-browse{background:#301c32;border-color:#4c2751}
+    #at-reference-dock .rd-action-browse>svg:first-child{color:#d79cdb}
+    #at-reference-dock .rd-action-apply{background:#192e27;border-color:#254a3d}
+    #at-reference-dock .rd-action-apply>svg:first-child{color:var(--rd-green)}
+    #at-reference-dock .rd-action-applications{background:#192d34;border-color:#28434d}
+    #at-reference-dock .rd-action-applications>svg:first-child{color:var(--rd-cyan)}
+    #at-reference-dock .rd-action-meeting{background:#332319;border-color:#4c3526}
+    #at-reference-dock .rd-action-meeting>svg:first-child{color:var(--rd-orange)}
+    #at-reference-dock .rd-action:hover,#at-reference-dock .rd-action[aria-pressed=true]{filter:brightness(1.15)}
+    #at-reference-dock .rd-recent{border:1px solid #343136;border-radius:12px;background:var(--rd-panel);overflow:clip;margin-bottom:13px}
+    #at-reference-dock .rd-activity{width:100%;display:grid;grid-template-columns:16px minmax(0,1fr) 90px;align-items:center;gap:8px;padding:12px 11px;border:0;background:transparent;text-align:left;position:relative;min-height:53px}
+    #at-reference-dock .rd-activity:not(:last-child):after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:1px;background:#343136}
+    #at-reference-dock .rd-activity:hover,#at-reference-dock .rd-activity[aria-pressed=true]{background:#2a2630}
+    #at-reference-dock .rd-activity>svg{height:15px;width:15px}
+    #at-reference-dock .rd-activity.application>svg{color:var(--rd-green)}
+    #at-reference-dock .rd-activity.meeting>svg{color:var(--rd-orange)}
+    #at-reference-dock .rd-activity.profile>svg{color:var(--rd-purple)}
+    #at-reference-dock .rd-activity-copy{display:grid;gap:1px;min-width:0}
+    #at-reference-dock .rd-activity-title{font-size:12px;font-weight:500;color:#f0edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #at-reference-dock .rd-activity-company{font-size:11px;color:var(--rd-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
+    #at-reference-dock .rd-time{font-size:11px;color:var(--rd-muted);white-space:nowrap;font-weight:400;text-align:right}
+    #at-reference-dock .rd-feedback{margin:0 13px 13px;padding:9px 10px;background:#26202f;border:1px solid #423350;border-radius:8px;font-size:11px;color:#d3c5e8}
+    @media(max-width:370px){#at-reference-dock{padding:10px 3px}#at-reference-dock .rd-header{padding-left:11px;padding-right:10px}#at-reference-dock .rd-brand{gap:6px}#at-reference-dock .rd-brand-name{font-size:12px}#at-reference-dock .rd-select{width:68px;font-size:11px}#at-reference-dock .rd-main{padding-left:11px;padding-right:11px}#at-reference-dock .rd-stat{padding-left:5px;padding-right:5px;min-height:113px}#at-reference-dock .rd-stat-label{font-size:11px}#at-reference-dock .rd-activity{grid-template-columns:15px minmax(0,1fr) 83px;gap:7px;padding-left:10px;padding-right:10px}#at-reference-dock .rd-time{font-size:11px}}
+    @media(pointer:coarse){#at-reference-dock .rd-action,#at-reference-dock .rd-activity,#at-reference-dock .rd-refresh,#at-reference-dock .rd-select{min-height:44px}#at-reference-dock .rd-refresh{width:36px}}
+  </style>
+  <section class="rd-dock" aria-label="Application Tracker dock design">
+    <header class="rd-header">
+      <div class="rd-brand"><span class="rd-logo"><i data-lucide="briefcase-business" aria-hidden="true"></i></span><span class="rd-brand-name">Application Tracker</span></div>
+      <label class="rd-person"><span class="rd-avatar" id="rd-avatar">P</span><select class="rd-select cursor-interaction" id="rd-candidate" aria-label="Selected candidate"><option>Phoenix</option><option>Demo</option></select></label>
+    </header>
+    <main class="rd-main">
+      <div class="rd-welcome"><p>Welcome back,<strong id="rd-name">Phoenix</strong></p><button type="button" class="rd-refresh cursor-interaction" id="rd-refresh" aria-label="Refresh activity"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></div>
+      <h2 class="rd-section-title">Today</h2>
+      <div class="rd-stats">
+        <div class="rd-stat rd-stat-resume"><i data-lucide="users-round" aria-hidden="true"></i><strong>0</strong><span class="rd-stat-label">Resume Prepared Today</span></div>
+        <div class="rd-stat rd-stat-applications"><i data-lucide="file-text" aria-hidden="true"></i><strong>1</strong><span class="rd-stat-label">Applications<br>Today</span></div>
+        <div class="rd-stat rd-stat-meetings"><i data-lucide="calendar-days" aria-hidden="true"></i><strong>0</strong><span class="rd-stat-label">Meetings</span></div>
+      </div>
+      <h2 class="rd-section-title">Quick Actions</h2>
+      <nav class="rd-actions" aria-label="Quick actions">
+        <button type="button" class="rd-action rd-action-browse cursor-interaction" data-action="Browse Jobs" aria-pressed="false"><i data-lucide="briefcase-business" aria-hidden="true"></i><span class="rd-action-label">Browse Jobs</span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+        <button type="button" class="rd-action rd-action-apply cursor-interaction" data-action="Apply to Job" aria-pressed="false"><i data-lucide="briefcase-business" aria-hidden="true"></i><span class="rd-action-label">Apply to Job</span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+        <button type="button" class="rd-action rd-action-applications cursor-interaction" data-action="Applications" aria-pressed="false"><i data-lucide="notebook-tabs" aria-hidden="true"></i><span class="rd-action-label">Applications</span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+        <button type="button" class="rd-action rd-action-meeting cursor-interaction" data-action="Schedule Meeting" aria-pressed="false"><i data-lucide="calendar-days" aria-hidden="true"></i><span class="rd-action-label">Schedule Meeting</span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+      <button type="button" class="rd-action rd-action-profile cursor-interaction" data-action="Profile settings" aria-pressed="false"><i data-lucide="user-round-cog" aria-hidden="true"></i><span class="rd-action-label">Profile settings</span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+        </nav>
+      <h2 class="rd-section-title">Recent Activity</h2>
+      <section class="rd-recent" aria-label="Reference sample recent activity">
+        <button type="button" class="rd-activity application cursor-interaction" data-activity="Senior Backend Engineer · Wunder" data-tooltip="Senior Backend Engineer · Wunder" aria-pressed="false"><i data-lucide="clipboard-list" aria-hidden="true"></i><span class="rd-activity-copy"><span class="rd-activity-title">Senior Backend Engineer, …</span><span class="rd-activity-company">Wunder</span></span><span class="rd-time">about 13 hours ago</span></button>
+        <button type="button" class="rd-activity meeting cursor-interaction" data-activity="Untitled · Brightvision" aria-pressed="false"><i data-lucide="calendar-days" aria-hidden="true"></i><span class="rd-activity-copy"><span class="rd-activity-title">Untitled</span><span class="rd-activity-company">Brightvision</span></span><span class="rd-time">about 18 hours ago</span></button>
+        <button type="button" class="rd-activity application cursor-interaction" data-activity="Backend Software Engineer · Brightvision" data-tooltip="Backend Software Engineer · Brightvision" aria-pressed="false"><i data-lucide="clipboard-list" aria-hidden="true"></i><span class="rd-activity-copy"><span class="rd-activity-title">Backend Software Engineer</span><span class="rd-activity-company">Brightvision</span></span><span class="rd-time">about 18 hours ago</span></button>
+        <button type="button" class="rd-activity application cursor-interaction" data-activity="Applied AI/ML Engineer · Boundless" data-tooltip="Applied AI/ML Engineer · Boundless" aria-pressed="false"><i data-lucide="clipboard-list" aria-hidden="true"></i><span class="rd-activity-copy"><span class="rd-activity-title">Applied AI/ML Engineer</span><span class="rd-activity-company">Boundless</span></span><span class="rd-time">about 18 hours ago</span></button>
+        <button type="button" class="rd-activity profile cursor-interaction" data-activity="Andrew Alsworth · US" aria-pressed="false"><i data-lucide="user-round-plus" aria-hidden="true"></i><span class="rd-activity-copy"><span class="rd-activity-title">Andrew Alsworth</span><span class="rd-activity-company">US</span></span><span class="rd-time">about 19 hours ago</span></button>
+        <button type="button" class="rd-activity application cursor-interaction" data-activity="Software Engineer and Lead · WeaveGrid" data-tooltip="Software Engineer and Lead · WeaveGrid" aria-pressed="false"><i data-lucide="clipboard-list" aria-hidden="true"></i><span class="rd-activity-copy"><span class="rd-activity-title">Software Engineer and Lead, …</span><span class="rd-activity-company">WeaveGrid</span></span><span class="rd-time">about 19 hours ago</span></button>
+      </section>
+    </main>
+    <div class="rd-feedback" id="rd-feedback" role="status" aria-live="polite" hidden></div>
+  </section>
+  <script>
+    (function(){
+      const root=document.getElementById('at-reference-dock');
+      const feedback=root.querySelector('#rd-feedback');
+      function show(message){feedback.textContent=message;feedback.hidden=false;}
+      root.querySelector('#rd-candidate').addEventListener('change',function(event){
+        const name=event.target.value;
+        root.querySelector('#rd-name').textContent=name;
+        root.querySelector('#rd-avatar').textContent=name.charAt(0);
+        show('Selected candidate: '+name+' · Design preview');
+      });
+      root.addEventListener('click',function(event){
+        const button=event.target.closest('button');
+        if(!button||!root.contains(button))return;
+        if(button.id==='rd-refresh'){
+          root.querySelectorAll('button[aria-pressed]').forEach(function(item){item.setAttribute('aria-pressed','false');});
+          show('Reference sample activity refreshed.');
+          return;
+        }
+        if(button.dataset.action){
+          root.querySelectorAll('.rd-action').forEach(function(item){item.setAttribute('aria-pressed',String(item===button));});
+          show(button.dataset.action+' · Selected in this design preview');
+        }
+        if(button.dataset.activity){
+          root.querySelectorAll('.rd-activity').forEach(function(item){item.setAttribute('aria-pressed',String(item===button));});
+          show(button.dataset.activity);
+        }
+      });
+    })();
+  </script>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.lucide) {
+      window.lucide.createIcons({ attrs: { width: 20, height: 20, 'stroke-width': 1.8 } });
+    }
+  });
+</script>
+</body>
+</html>

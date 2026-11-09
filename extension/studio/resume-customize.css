@@ -1,0 +1,25 @@
+/* One palette for the complete inspector, including Chromium's native selects. */
+#customize-panel { color: var(--color-ink); background: var(--color-surface); border-color: var(--color-line); color-scheme: inherit; }
+#customize-panel :is(fieldset,fieldset:disabled) { opacity: 1; color: var(--color-ink); }
+#customize-panel :is(label,legend,summary,.template-select,.setting-row) { color: var(--color-ink); }
+#customize-panel h3 { color: var(--color-muted); }
+#customize-panel .customize-group { border-color: var(--color-line); }
+#customize-panel .customize-group[open] > summary { color: var(--color-ink); background: var(--color-accordion-open); }
+#customize-panel :is(input,select) { color: var(--color-ink); background: var(--color-field); border-color: var(--color-field-line); color-scheme: inherit; caret-color: var(--color-ink); -webkit-text-fill-color: currentColor; }
+#customize-panel :is(input,select)::placeholder { color: var(--color-muted); opacity: 1; }
+#customize-panel select option { color: var(--color-ink); background: var(--color-field); -webkit-text-fill-color: currentColor; }
+#customize-panel :is(input,select)[aria-invalid="true"] { color: var(--color-danger-ink); background: var(--color-danger-fill); border-color: var(--color-danger-border); }
+#customize-panel :is(.template-picker,.setting-choices) button { color: var(--color-ink); background: var(--color-button-fill); border-color: var(--color-button-border); filter: none; }
+#customize-panel :is(.template-picker,.setting-choices) button[aria-pressed="true"] { color: var(--color-ink); background: var(--color-accent-soft); border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+#customize-panel :is(.template-picker,.setting-choices) button:hover:enabled { color: var(--color-ink); background: var(--color-button-hover); border-color: var(--color-accent); filter: none; }
+#customize-panel :is(.template-picker,.setting-choices) button:active:enabled { color: var(--color-ink); background: var(--color-button-pressed); filter: none; }
+#customize-panel :is(.template-picker,.setting-choices) button[aria-pressed="true"]:hover:enabled { background: var(--color-accent-soft); }
+#customize-panel .template-picker span { color: inherit; }
+#customize-panel .template-picker { scrollbar-color: var(--color-muted) var(--color-canvas); }
+#customize-panel :is(input,select,button,summary,.template-picker):focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+#customize-panel .setting-switch input { background: var(--color-muted); border-color: var(--color-muted); }
+#customize-panel .setting-switch input:checked { background: var(--color-accent-solid); border-color: var(--color-accent); }
+#customize-panel .setting-switch input::after { background: var(--color-on-accent); }
+#customize-panel :is(input,select,button):disabled { opacity: 1; color: var(--color-disabled-ink); background: var(--color-disabled-fill); border-color: var(--color-disabled-border); filter: none; cursor: not-allowed; }
+#customize-panel .experience-diagram i { background: var(--color-muted); }
+#customize-panel .experience-diagram.company-first i:nth-child(1),#customize-panel .experience-diagram.role-first i:nth-child(3) { background: var(--color-ink); }
