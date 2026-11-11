@@ -130,3 +130,10 @@
 .resume-web-editor-area[hidden] { display: none; }
 .resume-editor-frame { display: block; flex: 1; width: 100%; height: 100%; min-width: 0; border: 0; background: var(--color-surface); }
 @media (max-width: 800px) { .preview-web-page { height: auto; min-height: 100dvh; } .resume-web-layout,.resume-web-layout.input-open { grid-template-columns: minmax(0,1fr); flex: none; } .resume-web-preview-area { height: 80dvh; min-height: 520px; } .resume-web-editor-area { height: 80dvh; min-height: 540px; border-left: 0; border-top: 1px solid var(--web-line); } }
+.profile-resume-card{display:grid;gap:14px;padding:24px;margin-bottom:24px;border:1px solid var(--color-line);border-radius:12px;background:var(--color-surface);color:var(--color-ink);}
+.profile-resume-card h2{margin:0 0 8px;font-size:22px;font-weight:500;}
+.profile-resume-card p{margin:0;color:var(--color-muted);font-size:14px;}
+.profile-resume-actions{display:flex;gap:10px;flex-wrap:wrap;}
+.profile-resume-file{overflow-wrap:anywhere;}
+.studio-active-profile{display:grid;gap:5px;min-width:0;font-size:12px;}
+.studio-active-profile strong{overflow-wrap:anywhere;}

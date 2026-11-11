@@ -135,5 +135,7 @@ body.reference-dashboard { margin: 0; background: var(--reference-dashboard-bg);
 html[data-theme] #at-reference-dock .rd-header { height:auto; min-height:53px; flex-wrap:wrap; }
 html[data-theme] #at-reference-dock .rd-person { max-width:100%; }
 html[data-theme] #at-reference-dock .rd-select { width:auto; max-width:250px; }
+#at-reference-dock button.rd-brand { padding:0; border:0; background:transparent; color:inherit; text-align:left; font:inherit; border-radius:7px; }
+#at-reference-dock button.rd-brand:focus-visible { outline:2px solid var(--rd-purple); outline-offset:4px; }
 #at-reference-dock button { cursor: pointer; }
 #at-reference-dock button:disabled { cursor: wait; opacity: .6; }

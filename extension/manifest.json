@@ -82,6 +82,16 @@
         "content-scripts/content.css"
       ],
       "use_dynamic_url": true
+    },
+    {
+      "resources": [
+        "icons/icon-32.png",
+        "icons/icon-128.png"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
     }
   ],
   "minimum_chrome_version": "116",

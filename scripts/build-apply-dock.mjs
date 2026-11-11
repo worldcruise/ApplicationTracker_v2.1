@@ -32,14 +32,14 @@ export async function buildApplyDock() {
     return [name,svg(data,name)];
   }));
   root.querySelectorAll('[data-lucide]').forEach(node=>{node.outerHTML=icons[node.dataset.lucide];});
-  root.querySelector('#aj-profile').replaceChildren();
+  root.querySelector('#aj-profile').outerHTML='<span id="aj-profile" class="aj-profile-name"></span>';
   root.insertAdjacentHTML('afterbegin',`<nav class="aj-navigation" aria-label="Dock navigation"><button type="button" class="aj-button aj-quiet" data-action="dashboard">${icons['chevron-left']}Dashboard</button><h2>Apply to Job</h2></nav>`);
   root.querySelector('.aj-navigation').append(root.querySelector('#aj-header-state'));
   root.querySelector('.aj-header').remove();
   root.querySelector('#aj-change-job').outerHTML=`<div class="aj-job-pager" role="group" aria-label="Job queue card navigation"><button type="button" data-action="job-first" aria-label="First queued job">${icons['chevrons-left']}</button><button type="button" data-action="job-prev" aria-label="Previous queued job">${icons['chevron-left']}</button><span id="aj-job-position" aria-live="polite">0/0</span><button type="button" data-action="job-next" aria-label="Next queued job">${icons['chevron-right']}</button><button type="button" data-action="job-last" aria-label="Last queued job">${icons['chevrons-right']}</button></div>`;
   root.querySelector('#aj-job-picker').remove();
   root.querySelector('.aj-prepared-state .aj-badge').id='aj-prepared-status';
-  root.querySelector('.aj-prepared-state').insertAdjacentHTML('afterbegin','<span class="aj-badge" id="aj-sample-label" hidden>Sample</span>');
+  root.querySelector('.aj-prepared-state').insertAdjacentHTML('afterbegin','<span class="aj-badge" id="aj-sample-label" hidden></span>');
   root.querySelector('#aj-selected-job').insertAdjacentHTML('beforeend',`<div class="aj-card-actions"><button type="button" class="aj-button" data-action="job-url">${icons['arrow-up-right']}Go to URL</button><button type="button" class="aj-button" data-action="job-details">${icons['panel-right-open']}View details</button></div>`);
   root.querySelector('#aj-no-ready-jobs').insertAdjacentHTML('afterend','<button type="button" class="aj-button aj-wide" id="aj-open-queue" data-action="queue">Open Job Queues</button>');
   root.querySelector('#aj-update-profile').insertAdjacentHTML('beforebegin','<details class="aj-import-facts"><summary>Review imported details</summary><p id="aj-import-summary" class="aj-small"></p><div id="aj-import-details" class="aj-import-details"></div></details>');
@@ -48,7 +48,7 @@ export async function buildApplyDock() {
   root.querySelector('[data-action="use-prepared-resume"]').remove();
   const file=root.querySelector('#aj-file'),name=root.querySelector('#aj-upload-name'),box=root.querySelector('.aj-upload-box');
   box.before(file,name);box.remove();file.className='aj-file-hidden';file.hidden=true;name.className='aj-small';name.hidden=true;
-  root.querySelector('#aj-upload').insertAdjacentHTML('afterbegin',`<div class="aj-import-sources"><button type="button" class="aj-button aj-source-button" data-action="import-queue-json">${icons['file-json-2']}<span>Import JSON from job queue</span></button><button type="button" class="aj-button aj-source-button" data-action="manual-upload">${icons.upload}<span>Manual upload</span></button></div>`);
+  root.querySelector('#aj-upload').insertAdjacentHTML('afterbegin',`<div class="aj-import-sources"><button type="button" class="aj-button aj-source-button" data-action="import-queue-file">${icons['file-text']}<span>Import from Queue</span></button><button type="button" class="aj-button aj-source-button" data-action="manual-upload">${icons.upload}<span>Manual upload</span></button></div>`);
   root.querySelector('#aj-import-review .aj-badge').id='aj-import-source';
   root.querySelector('#aj-tailor').setAttribute('checked','');
   root.querySelector('#aj-upload').removeAttribute('hidden');
@@ -83,11 +83,15 @@ export async function buildApplyDock() {
 #at-reference-dock:has(#apply-ready-queue-design:not([hidden])) { padding:0; }
 #at-reference-dock .rd-dock:has(#apply-ready-queue-design:not([hidden])) { max-width:none; border:0; border-radius:0; overflow:visible; background:transparent; color-scheme:inherit; }
 body.reference-dashboard:has(#apply-ready-queue-design:not([hidden])) { min-height:100dvh; background:var(--reference-dashboard-bg); }
-${scope} { color-scheme:inherit; -webkit-font-smoothing:antialiased; background-image:radial-gradient(circle,color-mix(in srgb,var(--aj-text) 14%,transparent) .8px,transparent .8px); background-position:center; background-size:16px 16px; }
+${scope} { margin:0; padding:0; border:0; color-scheme:inherit; -webkit-font-smoothing:antialiased; background-image:radial-gradient(circle,color-mix(in srgb,var(--aj-text) 14%,transparent) .8px,transparent .8px); background-position:center; background-size:16px 16px; }
+${scope} .aj-window { max-width:none; margin:0; border:0; border-radius:0; }
+${scope} .aj-body { margin:0; padding:0; border:0; }
+${scope} :is(.aj-card,.aj-context,.aj-steps) { margin:0; border:0; }
 ${scope} .aj-primary,${scope} .aj-step[aria-current=step]>span,${scope} .aj-toggle:checked { background:var(--color-accent-solid); color:var(--color-on-accent); }
-${scope} .aj-navigation { display:flex; align-items:center; gap:12px; max-width:430px; margin:0 auto 10px; }
+${scope} .aj-navigation { display:flex; align-items:center; gap:12px; max-width:none; margin:0; padding:0 var(--dock-gutter,13px) 10px; border:0; }
 ${scope} .aj-navigation h2 { margin:0; font-size:18px; font-weight:500; letter-spacing:-.5px; line-height:1.3; }
 ${scope} .aj-navigation #aj-header-state { margin-left:auto; }
+${scope} .aj-profile-name { display:block; padding:9px 10px; border:1px solid var(--aj-line); border-radius:8px; color:var(--aj-text); background:var(--aj-bg); overflow-wrap:anywhere; }
 ${scope} .aj-job-pager { display:inline-flex; align-items:center; gap:2px; margin-left:auto; }
 ${scope} .aj-job-pager button { display:grid; place-items:center; width:23px; height:28px; padding:0; border:1px solid var(--aj-line); border-radius:5px; background:var(--aj-bg); color:var(--aj-text); }
 ${scope} .aj-job-pager svg { width:14px; height:14px; }

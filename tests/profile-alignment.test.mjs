@@ -7,6 +7,8 @@ import { emptyProfile, normalizeProfile, profileToStudio, studioToProfile } from
 import { createProfileRepository } from '../extension/studio/profile-repository.js';
 import { openStudioPreview } from '../extension/studio/dock.js';
 import { openWebStudioPreview } from '../extension/studio/web-preview.js';
+import {saveDefaultExportRoot} from '../extension/studio/default-export-root.js';
+import {createQueueDirectoryStore} from '../extension/studio/queue-export-folder.js';
 
 function profile() {
   return { ...emptyProfile(), profileName: 'Engineering',
@@ -21,6 +23,16 @@ function profile() {
     employmentData: { gender: 'I choose not to disclose', ethnicity: 'I choose not to disclose', eligibilityUS: true, sponsorship: false, disability: 'undisclosed', veteran: 'undisclosed', age: 'undisclosed', hispanicOrLatino: 'undisclosed' },
   };
 }
+
+test('Studio inherits the default export root without changing the canonical profile',async t=>{
+  const previous=globalThis.indexedDB;globalThis.indexedDB=new IDBFactory();t.after(()=>{globalThis.indexedDB=previous;});
+  const f=await repository(t,{profile:profile()}),before=structuredClone(f.values.profile);
+  await saveDefaultExportRoot({name:'Default exports',kind:'directory'},f.storage);
+  const candidate=await f.repo.bootstrap();assert.equal(candidate.document.applicationPreferences.exportDirectory,'Default exports');
+  assert.equal((await createQueueDirectoryStore().matching(candidate.id,'Default exports')).candidateId,candidate.id);assert.deepEqual(f.values.profile,before);
+  await f.repo.save({candidateId:candidate.id,expectedRevision:candidate.revision,document:candidate.document,mutationId:crypto.randomUUID()});
+  await saveDefaultExportRoot({name:'New default',kind:'directory'},f.storage);assert.equal((await f.repo.bootstrap()).document.applicationPreferences.exportDirectory,'New default');
+});
 
 test('SpeedyApply profiles round-trip through the Studio view without changing Autofill fields', () => {
   const source = profile(), document = profileToStudio(source, 'one');
@@ -90,7 +102,7 @@ test('reviewed dock resume updates retain canonical fields, backups and revision
   assert.equal(next.revision,current.revision+1);assert.deepEqual(values.profile.skillsData,['New skill']);assert.deepEqual(values.profile.employmentData,original.employmentData);assert.deepEqual(values.profile.contactData,original.contactData);
   assert.deepEqual((await storage.get(`profile-backup:resume-import:${current.id}:${current.revision}`))[`profile-backup:resume-import:${current.id}:${current.revision}`].profile,original);
   await assert.rejects(repo.updateCanonical({candidateId:current.id,expectedRevision:current.revision,profile:updated,mutationId:crypto.randomUUID()}),error=>error.code==='CONFLICT');
-  await storage.set({'dock-apply-run:v1:41':{candidateId:current.id,phase:'questions'}});await assert.rejects(repo.select('another-candidate'),error=>error.code==='RUN_ACTIVE');
+  await storage.set({'dock-apply-run:v1:41':{candidateId:current.id,phase:'questions'}});await assert.rejects(repo.select('another-candidate'),error=>error.code==='SINGLE_PROFILE');
   assert.equal((await repo.select(current.id)).id,current.id);
 });
 
@@ -107,11 +119,12 @@ test('legacy candidates migrate with backups without replacing an existing Speed
   assert.deepEqual(records['candidate-backup:profile-alignment:legacy'], legacy);
   assert.equal(records['candidate:legacy'], undefined);
   assert.equal(records['autofill-profile:legacy'].document, undefined);
-  assert.equal((await repo.list()).length, 2);
-  const selected = await repo.select('legacy');
+  assert.equal((await repo.list()).length, 1);
+  await assert.rejects(repo.select('legacy'),error=>error.code==='SINGLE_PROFILE');
+  const selected = await repo.get('legacy');
   assert.equal(selected.document.professionalProfile.summary, 'Legacy summary.');
   assert.equal(selected.document.professionalProfile.certifications[0].name, 'Certificate');
-  assert.equal(values.profile.contactData.email, 'legacy@example.test');
+  assert.equal(values.profile.contactData.email, source.contactData.email);
 });
 
 test('SpeedyApply JSON import, duplicate replacement, and deletion preserve backups and other data', async t => {

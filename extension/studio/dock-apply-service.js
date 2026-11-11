@@ -1,6 +1,7 @@
 import { safeJobUrl } from './reference-dashboard-data.js';
 import { normalizeProfile, profileName } from './profile-model.js';
 import {profileFromQueueResume,profileImportReview} from './queue-resume-import.js';
+import {readSavedQueueFile} from './saved-queue-file.js';
 
 export const DOCK_APPLY_OPERATIONS=['DOCK_APPLY_STATE','DOCK_APPLY_SELECT','DOCK_APPLY_START','DOCK_APPLY_ACTION','DOCK_APPLY_PDF','DOCK_APPLY_IMPORT'];
 const active=run=>run&&!['cancelled','submitted'].includes(run.phase);
@@ -8,7 +9,7 @@ const normalized=value=>String(value||'').replace(/\s+/g,' ').trim().toLowerCase
 const defaults={reuse:true,reviewAI:true,autoNext:false,saveAnswers:true,record:true,autoSubmit:false};
 const fieldKey=(frame,field)=>`${frame.documentId||frame.frameId}:${field.id}`;
 
-export function createDockApplyService({browser,storage,profiles,records,renderSnapshot,parseResume,generateAnswer}) {
+export function createDockApplyService({browser,storage,profiles,records,renderSnapshot,parseResume,generateAnswer,readQueueFile=readSavedQueueFile}) {
   const runs=new Map(),pdfs=new Map(),tasks=new Map(),actions=new Map();let starts=Promise.resolve();
   const fail=(code,message)=>{throw Object.assign(Error(message),{code});};
   async function windowFor(payload,sender) {
@@ -40,7 +41,7 @@ export function createDockApplyService({browser,storage,profiles,records,renderS
   }
   async function state(windowId,sender) {
     const [data,candidates,run,tabs]=await Promise.all([queueState(sender),profiles.list(),load(windowId),browser.tabs.query({windowId})]);
-    return {candidate:data.candidate,candidates,jobs:data.jobs,run:publicRun(run),
+    return {candidate:data.candidate,candidates,jobs:data.jobs.filter(job=>job.status==='Ready'&&job.resume?.snapshot&&job.resume.inputRevision===job.inputRevision),run:publicRun(run),
       tabs:tabs.filter(tab=>Number.isSafeInteger(tab.id)&&safeJobUrl(tab.url)).map(tab=>({id:tab.id,title:tab.title||tab.url,url:tab.url,active:!!tab.active})),defaults};
   }
   async function target(run) {
@@ -180,7 +181,7 @@ export function createDockApplyService({browser,storage,profiles,records,renderS
     if(operation==='DOCK_APPLY_START') {
       if(active(run))fail('RUN_ACTIVE','Finish or cancel the current run before starting another.');
       const {job,candidate}=await readyJob(payload.jobId,sender);
-      if(job.isMock)fail('SAMPLE_JOB','Sample jobs are for preview. Add a real job to start autofill.');
+      if(job.isMock)fail('SAMPLE_JOB','Preview jobs cannot be used for applications. Add a real job to start autofill.');
       const options={...defaults};for(const name of Object.keys(defaults))if(typeof payload.options?.[name]==='boolean')options[name]=payload.options[name];
       const tab=payload.tabId?await browser.tabs.get(payload.tabId):await browser.tabs.create({windowId,url:job.url,active:true});
       if(tab.windowId!==windowId||!safeJobUrl(tab.url||tab.pendingUrl))fail('INVALID_TAB','Choose an employer tab in this browser window.');
@@ -192,7 +193,15 @@ export function createDockApplyService({browser,storage,profiles,records,renderS
       if(active(run))fail('RUN_ACTIVE','Finish or cancel the current run before updating a profile.');
       const data=await queueState(sender),selected=data.jobs.find(job=>job.id===payload.jobId),candidate=await profiles.get(data.candidate?.id);
       if(!selected||!candidate||selected.candidateId!==candidate.id)fail('NOT_FOUND','Select a job for the current candidate.');
-      const job=selected;
+      const {job}=await readyJob(selected.id,sender);
+      if(payload.action==='queue-file'){
+        if(job.resume.export&&job.resume.export.state!=='complete'){
+          const ticket=await records.handle('DOCK_RECORDS_CV_INPUT',{action:'export-status',id:job.id,expectedRevision:job.revision,windowId,ticketId:job.resume.export.ticketId},sender),file=ticket.files?.find(item=>item.kind==='cv');
+          if(file?.state==='complete')job.resume.export={...job.resume.export,state:'complete',fileName:file.filename};
+        }
+        const file=await readQueueFile(job)||await pdf(job);
+        payload={...payload,action:'parse',base64:file.resumeBase64,fileName:file.fileName};
+      }
       if(payload.action==='queue-json'){
         const {job:ready}=await readyJob(job.id,sender);
         const profile=profileFromQueueResume(candidate,ready,ready.isMock?null:await pdf(ready).then(file=>({resumeBase64:file.resumeBase64,fileName:file.fileName,fileSize:Math.floor(file.resumeBase64.length*3/4),dateUploaded:new Date().toISOString()})));
@@ -204,9 +213,9 @@ export function createDockApplyService({browser,storage,profiles,records,renderS
         if(typeof payload.base64!=='string'||payload.base64.length>8*1024*1024||!payload.base64||typeof payload.fileName!=='string'||!/^.{1,180}\.(pdf|docx)$/i.test(payload.fileName))fail('INVALID_FILE','Choose a PDF or DOCX resume up to 6 MiB.');
         const parsed=await parseResume({base64:payload.base64,fileName:payload.fileName});
         const profile=normalizeProfile({...candidate.profile,...Object.fromEntries(['jobData','educationData','skillsData'].filter(key=>Array.isArray(parsed[key])).map(key=>[key,parsed[key]])),.../\.pdf$/i.test(payload.fileName)?{resumeData:{resumeBase64:payload.base64,fileName:payload.fileName,fileSize:Math.floor(payload.base64.length*3/4),dateUploaded:new Date().toISOString()}}:{}});
-        if(job.isMock)return {previewOnly:true,candidateId:candidate.id,...profileImportReview(profile)};
+        if(job.isMock)return {previewOnly:true,candidateId:candidate.id,fileName:payload.fileName,...profileImportReview(profile)};
         const token=crypto.randomUUID();await storage.set({[`dock-apply-import:v1:${windowId}`]:{token,jobId:job.id,inputRevision:job.inputRevision,resumeVersion:job.resume?.version||null,candidateId:candidate.id,candidateRevision:candidate.revision,profile}});
-        return {token,candidateId:candidate.id,revision:candidate.revision,...profileImportReview(profile)};
+        return {token,candidateId:candidate.id,revision:candidate.revision,fileName:payload.fileName,...profileImportReview(profile)};
       }
       if(payload.action!=='apply')fail('INVALID_REQUEST','Choose a resume import action.');
       const imported=(await storage.get(`dock-apply-import:v1:${windowId}`))[`dock-apply-import:v1:${windowId}`];

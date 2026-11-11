@@ -2,6 +2,27 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { dockFixture } from './helpers/dock-records-fixture.mjs';
 
+test('manual applications validate required fields and retain resume and cover-letter edits',async t=>{
+  const f=await dockFixture(t);
+  for(const fields of [{company:'',role:'Engineer'},{company:'Company',role:''}])await assert.rejects(f.mutate('create-application',null,fields),{code:'INVALID_REQUEST'});
+  const created=await f.mutate('create-application',null,{company:'Company',role:'Engineer'}),app=created.applications.find(item=>item.id===created.selectedId);
+  assert.equal(created.jobs.length,0);assert.equal(app.company,'Company');assert.equal(app.status,'applied');
+  const cvJsonRaw=JSON.stringify({company:'Company',title:'Engineer',summary:'Factual summary',skills:[],experience:[],education:[]});
+  const result=await f.mutate('update',app,{status:'interview',notes:'',cvJsonRaw,coverLetterRaw:'My cover letter',coverLetterEnabled:true});
+  const saved=result.applications.find(item=>item.id===app.id);assert.equal(saved.resume.cvJsonRaw,cvJsonRaw);assert.equal(saved.coverLetterRaw,'My cover letter');assert.equal(saved.coverLetterEnabled,true);assert.equal(saved.status,'interview');
+});
+
+test('clearing the queue refuses stale data and preserves other candidates and applications',async t=>{
+  const f=await dockFixture(t),first=await f.create('first'),second=await f.create('second'),key='dock-job-records:v1';
+  const stored=(await f.storage.get(key))[key];stored.jobs.push({...first,id:'other-job',candidateId:'other-candidate'});await f.storage.set({[key]:stored});
+  const payload={action:'delete-all',candidateId:first.candidateId,type:'queue',mutationId:crypto.randomUUID(),jobs:[{id:first.id,revision:first.revision},{id:second.id,revision:0}]};
+  await assert.rejects(f.request('DOCK_RECORDS_MUTATE',payload),{code:'CONFLICT'});assert.equal((await f.request('DOCK_RECORDS_STATE')).jobs.length,2);
+  payload.jobs[1].revision=second.revision;
+  const result=await f.request('DOCK_RECORDS_MUTATE',payload);assert.equal(result.jobs.length,0);assert.equal(result.applications.length,1);
+  assert.equal((await f.storage.get(key))[key].jobs.find(job=>job.id==='other-job').deletedAt,undefined);
+  assert.equal((await f.request('DOCK_RECORDS_MUTATE',payload)).jobs.length,0);
+});
+
 test('dock queue persists, rejects duplicates and keeps canonical application fields',async t => {
   const f=await dockFixture(t),created=await f.create();f.restart();
   const state=await f.request('DOCK_RECORDS_STATE');assert.equal(state.jobs[0].id,created.id);assert.equal(state.jobs[0].candidateId,'candidate-1');

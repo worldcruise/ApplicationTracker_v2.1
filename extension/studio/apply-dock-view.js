@@ -1,6 +1,7 @@
 import { APPLY_DOCK_MARKUP } from './apply-dock-markup.js';
 import { studioStorage } from './storage.js';
 import { safeJobUrl } from './reference-dashboard-data.js';
+import {withRequestDeadline} from './request-deadline.js';
 
 export function mountApplyDock(host,{browser=globalThis.chrome,privateStorage=studioStorage,onDashboard=()=>{},onQueue=()=>{},onApplication=()=>{}}={}) {
   host.innerHTML=APPLY_DOCK_MARKUP;
@@ -13,14 +14,14 @@ export function mountApplyDock(host,{browser=globalThis.chrome,privateStorage=st
   const el=(tag,text,className)=>{const node=doc.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;};
   function tell(message,error=false){if(!alive)return;$('#aj-feedback').textContent=message;$('#aj-feedback').className=`aj-feedback${error?' error':''}`;$('#aj-feedback').hidden=!message;}
   async function request(operation,payload={}) {
-    const response=await browser.runtime.sendMessage({version:1,requestId:crypto.randomUUID(),operation,payload:{windowId,...payload}});
+    const response=await withRequestDeadline(browser.runtime.sendMessage({version:1,requestId:crypto.randomUUID(),operation,payload:{windowId,...payload}}));
     if(!response?.ok)throw Error(response?.error?.message||'The dock could not complete this action.');return response.result;
   }
-  const persist=()=>loaded?privateStorage.set({[uiKey]:ui}):Promise.resolve();
-  function accept(next){data=next;if(!data.jobs.some(job=>job.id===ui.jobId))ui.jobId=data.jobs[0]?.id||null;if(data.run&&running())ui.jobId=data.run.jobId;if(!Object.keys(ui.options).length)ui.options={...data.defaults};}
+  const persist=()=>loaded?withRequestDeadline(privateStorage.set({[uiKey]:ui}),3000):Promise.resolve();
+  function accept(next){data={...next,jobs:next.jobs.filter(isPrepared)};if(!data.jobs.some(job=>job.id===ui.jobId))ui.jobId=data.jobs[0]?.id||null;if(data.run&&running())ui.jobId=data.run.jobId;if(!Object.keys(ui.options).length)ui.options={...data.defaults};}
   async function refresh(){const current=++revision;try{const next=await request('DOCK_APPLY_STATE');if(alive&&current===revision){accept(next);render();}}catch(error){tell(error.message,true);}}
   async function run(action){if(busy)return;busy=true;tell('');render();try{await action();}catch(error){tell(error.message,true);}finally{busy=false;if(alive)render();}}
-  function value(selector,next){const node=$(selector);if(doc.activeElement!==node&&node.value!==String(next||''))node.value=next||'';}
+  function value(selector,next){const node=$(selector);if((root.getRootNode().activeElement||doc.activeElement)!==node&&node.value!==String(next||''))node.value=next||'';}
   const option=(value,text)=>{const node=el('option',text);node.value=String(value);return node;};
   const question=()=>data.run?.questions.find(field=>field.key===ui.question)||data.run?.questions.find(field=>!field.filled)||data.run?.questions[0];
   async function command(action,extra={}){accept(await request('DOCK_APPLY_ACTION',{runId:data.run?.id,action,...extra}));await persist();render();}
@@ -30,25 +31,25 @@ export function mountApplyDock(host,{browser=globalThis.chrome,privateStorage=st
     const step=ui.step==='setup'&&!isRunning?'setup':current?.step||'setup';
     $('#aj-setup').hidden=step!=='setup';$('#aj-autofill').hidden=step!=='autofill';$('#aj-review-panel').hidden=step!=='review';
     root.querySelectorAll('[data-step]').forEach(button=>{if(button.dataset.step===step)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');button.disabled=busy;});
-    const picker=$('#aj-profile');picker.replaceChildren(...data.candidates.map(candidate=>option(candidate.id,candidate.name)));if(!data.candidates.length)picker.append(option('','Create your profile in Settings'));picker.value=data.candidate?.id||'';picker.disabled=busy||!!isRunning||!data.candidates.length;
+    const picker=$('#aj-profile');picker.textContent=data.candidate?.name||'Create your profile in Settings';
     const tabPicker=$('#aj-target-tab');tabPicker.replaceChildren(option(0,'Open the selected job in a new tab'),...data.tabs.map(tab=>option(tab.id,`${tab.active?'Current: ':''}${tab.title}`)));tabPicker.value=String(ui.tabId);tabPicker.disabled=busy||!!isRunning;
     $('#aj-selected-job').hidden=!job;$('#aj-no-ready-jobs').hidden=!!job;$('#aj-open-queue').hidden=!!job;
     const index=data.jobs.findIndex(item=>item.id===ui.jobId);$('#aj-job-position').textContent=`${index<0?0:index+1}/${data.jobs.length}`;
     for(const action of ['job-first','job-prev'])$(`[data-action="${action}"]`).disabled=busy||!!isRunning||index<=0;
     for(const action of ['job-next','job-last'])$(`[data-action="${action}"]`).disabled=busy||!!isRunning||index<0||index>=data.jobs.length-1;
     if(job){$('#aj-prepared-company').textContent=job.company;$('#aj-prepared-title').textContent=job.role;const updated=new Date(job.resume?.savedAt||job.updatedAt);$('#aj-prepared-date').textContent=Number.isFinite(updated.getTime())?`Updated ${new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric'}).format(updated)}`:'';$('#aj-saved-filename').textContent=isPrepared(job)?`${job.candidateName}_${job.company}.pdf`:'No prepared resume yet';value('#aj-jd',job.description);}
-    $('#aj-prepared-status').textContent=isPrepared(job)?'Ready':job?.status||'Queued';$('#aj-prepared-status').classList.toggle('good',!!isPrepared(job));$('#aj-sample-label').hidden=!job?.isMock;
+    $('#aj-prepared-status').textContent=isPrepared(job)?'Ready':job?.status||'Queued';$('#aj-prepared-status').classList.toggle('good',!!isPrepared(job));$('#aj-sample-label').hidden=true;
     $('[data-action="preview-prepared-job"]').disabled=busy||!isPrepared(job);
     $('[data-action="job-url"]').disabled=busy||!safeJobUrl(job?.url);$('[data-action="job-details"]').disabled=busy||!job;
     $('#aj-tailor').checked=ui.tailor;$('#aj-tailor').disabled=busy||!!isRunning;$('#aj-upload').hidden=!ui.tailor;
     $('#aj-file').disabled=busy||!!isRunning||!job;
-    $('[data-action="import-queue-json"]').disabled=busy||!!isRunning||!isPrepared(job);$('[data-action="manual-upload"]').disabled=busy||!!isRunning||!job;
+    $('[data-action="import-queue-file"]').disabled=busy||!!isRunning||!isPrepared(job);$('[data-action="manual-upload"]').disabled=busy||!!isRunning||!job;
     $('#aj-import-review').hidden=!imported;$('#aj-import-summary').textContent=imported?.summary||'';$('#aj-update-profile').disabled=busy||!!isRunning||!!imported?.previewOnly;
-    $('#aj-import-source').textContent=imported?.previewOnly?'Sample preview':'Resume import';
+    $('#aj-import-source').textContent=imported?.previewOnly?'Preview only':'Resume import';
     const name=data.candidate?.name||'current profile';$('#aj-import-person').textContent=name;$('#aj-update-profile').textContent=`Update ${name}’s profile`;
     const importDetails=$('#aj-import-details');if(importDetails){importDetails.replaceChildren();if(imported)for(const [key,title]of [['work','Work history'],['education','Education'],['skills','Skills']]){importDetails.append(el('h4',title));for(const item of imported.changes?.[key]||[])importDetails.append(el('p',item));}}
     root.querySelectorAll('[data-option]').forEach(control=>{control.checked=!!ui.options[control.dataset.option];control.disabled=busy||!!isRunning;});
-    $('#aj-start').disabled=busy||!isPrepared(job)||!!job?.isMock||!!isRunning;$('#aj-start-note').textContent=job?.isMock?'Sample queue item for preview. Add a real job to autofill.':!isPrepared(job)?'Prepare and save this job’s resume in Application Workspace.':ui.tailor?`Use a resume to update ${name}’s profile before autofill.`:'Uses the selected prepared resume. No upload required.';
+    $('#aj-start').disabled=busy||!isPrepared(job)||!!job?.isMock||!!isRunning;$('#aj-start-note').textContent=job?.isMock?'Preview queue item. Add a real job to autofill.':!isPrepared(job)?'Prepare and save this job’s resume in Application Workspace.':ui.tailor?`Use a resume to update ${name}’s profile before autofill.`:'Uses the selected prepared resume. No upload required.';
     const status={filling:'Filling application',drafting:'Drafting answer',questions:'Needs review',ready:'Ready for review',paused:'Paused',cancelled:'Cancelled',error:'Needs attention','submission-pending':'Check submission',submitted:'Applied'};
     $('#aj-header-state').textContent=current?status[current.phase]||'Draft':'Draft';$('#aj-header-state').className=`aj-badge${['ready','submitted'].includes(current?.phase)?' good':''}`;$('#aj-run-title').textContent=current?status[current.phase]||'Autofill':'Ready to start';$('#aj-run-description').textContent=current?.message||'';
     const fields=current?.fields||[],filled=fields.filter(field=>field.filled).length,required=fields.filter(field=>field.required),requiredFilled=required.filter(field=>field.filled).length;
@@ -78,7 +79,7 @@ export function mountApplyDock(host,{browser=globalThis.chrome,privateStorage=st
   }
   const targetLabel=el('label',undefined,'aj-target-tab');targetLabel.append(el('span','Application tab','aj-label'));const targetSelect=el('select',undefined,'aj-select');targetSelect.id='aj-target-tab';targetLabel.append(targetSelect);root.querySelector('.aj-option-list').append(targetLabel);
   const choices=el('select',undefined,'aj-select');choices.id='aj-answer-choice';choices.setAttribute('aria-label','Answer to the selected application question');$('#aj-answer').after(choices);
-  $('#aj-no-ready-jobs').textContent='No jobs in this profile’s Job Queue yet. Open Job Queues to add a job.';
+  $('#aj-no-ready-jobs').textContent='No Ready jobs in this profile’s Job Queue. Prepare and save a resume in Job Queues first.';
   function selectJob(index){ui.jobId=data.jobs[index]?.id||null;ui.tabId=data.tabs.find(tab=>tab.url===selected()?.url)?.id||0;imported=null;$('#aj-file').value='';$('#aj-upload-name').hidden=true;$('#aj-prepared-preview').hidden=true;$('#aj-profile-updated').hidden=true;tell('');void persist();render();}
   async function preview(selector){
     const job=selected(),useRun=data.run&&ui.step!=='setup',id=useRun?data.run.jobId:job?.id;if(!id)throw Error('Choose a prepared job first.');
@@ -89,18 +90,21 @@ export function mountApplyDock(host,{browser=globalThis.chrome,privateStorage=st
     container.replaceChildren();const iframe=el('iframe',undefined,'aj-pdf');iframe.src=pdfUrl;iframe.title='Selected prepared resume PDF';container.append(iframe);container.hidden=false;
   }
   function click(event){
-    const button=event.target.closest('button');if(!button||!root.contains(button)||button.disabled)return;
+    const button=event.target.closest('button');if(!button||!root.contains(button))return;
+    if(button.dataset.action==='dashboard'){
+      onDashboard();void persist().catch(error=>tell(`Dashboard opened. Unsaved setup remains in this dock: ${error.message}`,true));return;
+    }
+    if(button.disabled)return;
     if(button.dataset.question){ui.question=button.dataset.question;render();void persist();return;}
     const name=button.dataset.action||button.dataset.step;
     if(['job-first','job-prev','job-next','job-last'].includes(name)){const index=data.jobs.findIndex(job=>job.id===ui.jobId);selectJob(name==='job-first'?0:name==='job-last'?data.jobs.length-1:index+(name==='job-prev'?-1:1));return;}
     if(name==='manual-upload'){$('#aj-file').click();return;}
     void run(async()=>{
-      if(name==='dashboard'){await persist();onDashboard();return;}
       if(name==='queue'){await persist();await onQueue();return;}
       if(name==='job-details'){await persist();await onQueue(selected()?.id);return;}
       if(name==='job-url'){const url=safeJobUrl(selected()?.url);if(!url)throw Error('This job has no valid URL.');const tab=await browser.tabs.create({windowId,url,active:true});await refresh();ui.tabId=tab.id;await persist();return;}
       if(name==='preview-prepared-job'||name==='preview-resume'){await preview(name==='preview-resume'?'#aj-resume-preview':'#aj-prepared-preview');return;}
-      if(name==='import-queue-json'){imported=null;imported=await request('DOCK_APPLY_IMPORT',{action:'queue-json',jobId:ui.jobId});$('#aj-upload-name').textContent=`JSON from ${selected()?.company}`;$('#aj-upload-name').hidden=false;return;}
+      if(name==='import-queue-file'){imported=null;imported=await request('DOCK_APPLY_IMPORT',{action:'queue-file',jobId:ui.jobId});$('#aj-upload-name').textContent=imported.fileName||'Saved resume PDF';$('#aj-upload-name').hidden=false;return;}
       if(name==='update-profile'){if(!imported)throw Error('Parse a resume first.');accept(await request('DOCK_APPLY_IMPORT',{action:'apply',jobId:ui.jobId,token:imported.token}));imported=null;$('#aj-profile-updated').hidden=false;$('#aj-profile-revision').textContent='Profile updated';tell('Profile updated from the reviewed resume.');return;}
       if(name==='start'||name==='autofill'&&(!data.run||data.run.phase==='cancelled')){accept(await request('DOCK_APPLY_START',{jobId:ui.jobId,tabId:Number(ui.tabId)||undefined,options:ui.options}));ui.step='autofill';await persist();return;}
       if(name==='setup'||name==='edit-details'){if(running())await command('cancel');ui.step='setup';await persist();return;}
@@ -115,7 +119,6 @@ export function mountApplyDock(host,{browser=globalThis.chrome,privateStorage=st
   }
   function input(event){
     const node=event.target;
-    if(node.id==='aj-profile'){void run(async()=>{accept(await request('DOCK_APPLY_SELECT',{candidateId:node.value}));selectJob(0);await persist();});return;}
     if(node.id==='aj-target-tab'){ui.tabId=Number(node.value);void persist();return;}
     if(node.id==='aj-tailor'){ui.tailor=node.checked;ui.tailorPreferenceSet=true;render();void persist();return;}
     if(node.dataset.option){ui.options[node.dataset.option]=node.checked;void persist();return;}

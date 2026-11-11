@@ -1,0 +1,80 @@
+{
+  "manifest_version": 3,
+  "name": "AI Agent Template",
+  "short_name": "Sidebar GPT",
+  "version": "0.5.0",
+  "description": "ChatGPT and a Resume Studio UI preview together in your browser sidebar.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "sidePanel",
+    "declarativeNetRequestWithHostAccess",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "src/service-worker.mjs",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open Sidebar GPT",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "32": "assets/icon-32.png",
+      "48": "assets/icon-48.png",
+      "128": "assets/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  },
+  "commands": {
+    "read-job-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
+      "description": "Read job page into Resume Studio"
+    },
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+G",
+        "mac": "Command+Shift+G"
+      },
+      "description": "Open Sidebar GPT"
+    }
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "src/build-info.js",
+        "src/workspace-shortcut-keys.js",
+        "src/chat-history.js",
+        "src/chatgpt-queue.js",
+        "src/chatgpt-tab.js",
+        "src/chatgpt-frame.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-src https://chatgpt.com;"
+  }
+}

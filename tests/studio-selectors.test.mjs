@@ -55,13 +55,12 @@ test('Studio selectors load assignments and flush edits before saving a new prom
   const app = harness(t);
   await app.settle();
   assert.equal(app.find('studio-prompt').props.value, 'first');
-  app.find('studio-candidate').props.onChange({ target: { value: 'two' } });
-  assert.ok(app.operations.includes('candidate:two'));
+  assert.equal(app.find('studio-candidate'),undefined);
   const flush = deferred(); app.props.flush = () => { app.operations.push('flush'); return flush.promise; };
   const select = app.find('studio-prompt').props.onChange;
   select({ target: { value: 'second' } });
   select({ target: { value: 'second' } });
-  assert.equal(app.find('studio-candidate').props.disabled, true);
+  assert.equal(app.find('studio-prompt').props.disabled, true);
   assert.ok(!app.requests.some(request => request.operation === 'PROMPT_SELECT'));
   flush.resolve(); await app.settle();
   const saves = app.requests.filter(request => request.operation === 'PROMPT_SELECT');
@@ -69,7 +68,7 @@ test('Studio selectors load assignments and flush edits before saving a new prom
   assert.equal(saves[0].payload.expectedCandidateRevision, 1);
   assert.ok(app.operations.indexOf('flush') < app.operations.indexOf('PROMPT_SELECT'));
   assert.equal(app.find('studio-prompt').props.value, 'second');
-  assert.equal(app.find('studio-candidate').props.disabled, false);
+  assert.equal(app.find('studio-prompt').props.disabled, false);
 });
 
 test('Studio prompt save failures retain the previous selection and offer a reload', async t => {
@@ -81,7 +80,7 @@ test('Studio prompt save failures retain the previous selection and offer a relo
   app.find('studio-prompt').props.onChange({ target: { value: 'second' } });
   const tree = await app.settle();
   assert.equal(app.find('studio-prompt').props.value, 'first');
-  assert.equal(app.find('studio-candidate').props.disabled, false);
+  assert.equal(app.find('studio-prompt').props.disabled, false);
   const error = nodes(tree).find(node => node.props.role === 'alert');
   assert.match(error.props.children[0], /Saved profile changed/);
   nodes(error).find(node => node.type === 'button').props.onClick();

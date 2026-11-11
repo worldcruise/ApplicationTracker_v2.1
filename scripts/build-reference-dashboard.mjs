@@ -27,11 +27,14 @@ export async function buildReferenceDashboard() {
       return svg(icon, name);
     }).replace('>Application Tracker</span>', '>Application Tracker 2.1</span>')
     .replaceAll('Schedule Meeting', 'Meetings');
-  const activity = markup.match(/<button[^>]*class="rd-activity application[^>]*>([\s\S]*?)<\/button>/)?.[1]
-    ?.replace(/(<span class="rd-(?:activity-title|activity-company|time)">)[^<]*(<\/span>)/g, '$1$2');
-  if (!activity) throw new Error('The reference activity markup changed.');
+  markup=markup.replace(/<div class="rd-brand">([\s\S]*?)<\/div>/,'<button type="button" class="rd-brand" data-action="Web Dashboard" aria-label="Open Dashboard" title="Open Dashboard">$1</button>');
+  const appLogo=(await readFile(path.join(root,'extension/icons/application-tracker.svg'),'utf8')).trim().replace('<svg ','<svg aria-hidden="true" focusable="false" style="width:100%;height:100%" ');
+  markup=markup.replace(/(<span class="rd-logo">)[\s\S]*?(<\/span>)/,`$1${appLogo}$2`);
   // Reference records are design samples; the controller fills these from saved data.
-  markup = markup.replace(/<select([^>]*)>[\s\S]*?<\/select>/, '<select$1 disabled><option value="">Candidate</option></select>')
+  const activity=markup.match(/<button[^>]*class="rd-activity application[^>]*>([\s\S]*?)<\/button>/)?.[1]
+    ?.replace(/(<span class="rd-(?:activity-title|activity-company|time)">)[^<]*(<\/span>)/g,'$1$2');
+  if(!activity)throw Error('The reference activity markup changed.');
+  markup = markup.replace(/<select\b[^>]*\bid="rd-candidate"[^>]*>[\s\S]*?<\/select>/, '')
     .replace('id="rd-name">Phoenix', 'id="rd-name">…').replace('id="rd-avatar">P', 'id="rd-avatar">–')
     .replace(/(<div class="rd-stat[^>]*>[\s\S]*?<strong>)[^<]*(<\/strong>)/g, '$1—$2')
     .replace(/<section class="rd-recent"[\s\S]*?<\/section>/, '<section class="rd-recent" aria-label="Recent activity"><p class="rd-empty">Loading activity…</p></section>');
@@ -55,7 +58,7 @@ export async function buildReferenceDashboard() {
   };
   const sharedTokens={soft:background('.rd-refresh'),'accent-soft':background('.rd-stat-resume'),'good-soft':background('.rd-stat-applications'),'warn-soft':background('.rd-stat-meetings')};
   const sharedStyles=`#at-reference-dock { ${Object.entries(sharedTokens).map(([name,value])=>`--rd-${name}:${value};`).join(' ')} }\nhtml[data-theme="light"] #at-reference-dock { ${Object.entries(sharedTokens).map(([name,value])=>`--rd-${name}:${palette[value]||value};`).join(' ')} }`;
-  const extra = `\n:root { --reference-dashboard-bg: #f7f7fa; }\n:root[data-theme="dark"] { --reference-dashboard-bg: #121213; }\nbody.reference-dashboard { margin: 0; background: var(--reference-dashboard-bg); }\n#at-reference-dock .rd-empty { margin: 0; padding: 18px 11px; font-size: 12px; color: var(--rd-muted); text-align: center; }\nhtml[data-theme] #at-reference-dock .rd-header { height:auto; min-height:53px; flex-wrap:wrap; }\nhtml[data-theme] #at-reference-dock .rd-person { max-width:100%; }\nhtml[data-theme] #at-reference-dock .rd-select { width:auto; max-width:250px; }\n#at-reference-dock button { cursor: pointer; }\n#at-reference-dock button:disabled { cursor: wait; opacity: .6; }\n`;
+  const extra = `\n:root { --reference-dashboard-bg: #f7f7fa; }\n:root[data-theme="dark"] { --reference-dashboard-bg: #121213; }\nbody.reference-dashboard { margin: 0; background: var(--reference-dashboard-bg); }\n#at-reference-dock .rd-empty { margin: 0; padding: 18px 11px; font-size: 12px; color: var(--rd-muted); text-align: center; }\nhtml[data-theme] #at-reference-dock .rd-header { height:auto; min-height:53px; flex-wrap:wrap; }\nhtml[data-theme] #at-reference-dock .rd-person { max-width:100%; }\nhtml[data-theme] #at-reference-dock .rd-select { width:auto; max-width:250px; }\n#at-reference-dock button.rd-brand { padding:0; border:0; background:transparent; color:inherit; text-align:left; font:inherit; border-radius:7px; }\n#at-reference-dock button.rd-brand:focus-visible { outline:2px solid var(--rd-purple); outline-offset:4px; }\n#at-reference-dock button { cursor: pointer; }\n#at-reference-dock button:disabled { cursor: wait; opacity: .6; }\n`;
   await writeChanged(path.join(root, 'extension/dashboard.css'), `/* Original reference styles; local light palette follows. */\n${styles[1]}\n${light}\n${sharedStyles}\n${extra}`);
   await writeChanged(path.join(root, 'extension/dashboard.html'), '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Application Tracker 2.1 — Dashboard</title><link rel="icon" href="icons/icon-32.png"><link rel="stylesheet" href="studio/theme.css"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="job-records.css"><link rel="stylesheet" href="apply-dock.css"><script type="module" src="studio/theme-bootstrap.js"></script></head><body class="reference-dashboard"><div id="reference-dashboard-root"></div><script type="module" src="dashboard.js"></script></body></html>\n');
   await writeChanged(path.join(root, 'extension/studio/LUCIDE-LICENSE.txt'), await readFile(path.join(root, 'node_modules/lucide/LICENSE'), 'utf8'));

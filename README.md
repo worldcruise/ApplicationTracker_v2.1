@@ -45,13 +45,23 @@ npm.cmd run check
 2. Enable **Developer mode**.
 3. Click **Load unpacked** and select this repository's `dist/autofill` folder.
 4. Click **Application Tracker 2.1** in the extensions menu to open the dock's Dashboard.
+   On regular websites, this mounts the dock directly inside the page's Shadow DOM:
+   384px wide, full height, flush right, with no outer margin or corner radius.
+   Click **›** beside Settings to collapse it and restore page space.
+   Click the edge icon to reopen it; drag its grip to move it vertically.
+   Visibility belongs to that tab and is retained when that tab navigates.
+   The header shows the active candidate's initial without a dropdown. Settings
+   opens the extension web page. When a page cannot host the dock, the toolbar
+   button opens the web Dashboard, reusing an existing extension tab in that window.
+   Queue **Update** and **Cover letter** open the existing CV editor in
+   an extension tab so saved folder permissions stay on the extension's origin.
    Select **Resume Studio** to open its preview and editor web page.
    The Application Tracker Overview opens on first installation.
 5. The **web Dashboard** shows application counts, the 7/30/90-day activity chart,
    daily goal, recent applications and job capture. The **dock Dashboard** keeps
    the HTML reference's Today cards, Quick Actions and Recent Activity.
    **Applications** contains search, status/date filters, the list and
-   Manage. **Settings** starts with Profile, followed by Prompt settings, Autofill
+   Manage. **Settings** starts with Profile, followed by Prompt settings, Autofill, Other
    and any available Premium settings. **Resume Studio** opens the preview; use
    **Input** beside **Customize** to expand its editor. The dock and all extension pages share
    the original light/dark palette and a saved theme preference.
@@ -138,8 +148,12 @@ React runtime. See [the web page notes](docs/web-page-layout.md).
 
 ## Resume Studio
 
-Create or edit your profile in **Settings → Profile**. Resume Studio uses that
-active profile, with candidate and prompt selectors together above Job Description.
+Create or edit your profile in **Settings → Profile**. Upload a PDF or DOCX resume
+to create it; **Replace resume** updates the same profile and its parsed details.
+Manual profile editing remains available. The workflow exposes one active profile,
+without profile switching, cloning, or extra-profile creation. Earlier records stay
+in private storage for history, and resume replacements keep revision backups.
+Resume Studio shows that profile's name and its saved prompt above Job Description.
 Open **Input** beside **Customize** to show the editor. It starts collapsed and
 keeps your draft when hidden.
 Selecting a prompt saves its assignment for **Copy Prompt + JD**. Capture the active job page with
@@ -175,7 +189,10 @@ Meetings opens the Meetings board, and Profile settings opens Settings.
 Meetings show as unavailable while a calendar is not connected. Dock development
 does not change the web Dashboard's component, data helpers or stylesheet.
 
-In Application Workspace, **Add manually** opens the queue-item form. **Open in Resume Studio**
+In Application Workspace, **Add manually** opens the queue-item form on Job Queues.
+On Applications it opens **Add application record manually**, requiring Company and
+Role (marked with an asterisk) and saving an application record directly.
+**Open in Resume Studio**
 loads that job into the existing editor, preserving the previous draft in a private
 backup. After preparing CV JSON there, **Save Studio result** validates and retains
 its resume snapshot. **Mark as applied** records one SpeedyApply application.
@@ -185,20 +202,28 @@ Failed jobs support retry. Every queue card supports Delete and Undo, including
 Queued and Ready jobs. Dock form drafts survive tab switches
 and dock reopening. The web Applications page retains its existing UI.
 Job Queue cards use compact spacing with labelled **Go to apply** and **View resume**
-actions. Go to apply selects that job in the dock workflow, including jobs whose
-resume still needs preparation. View resume opens the extension's Resume Studio
+actions. Apply to Job lists only Ready jobs with a current saved resume.
+View resume opens the extension's Resume Studio
 preview with that job's saved CV JSON, template and formatting; the previous editor
 draft is backed up first. Every card also offers **Update resume**, opening **CV input**.
 This modal reuses Resume Studio's CV and cover-letter controls without a JD section.
-Paste or import six-field CV JSON; a status bar validates it before Update or Download.
-Update copies differing company/title labels from the JSON and retains matching labels.
-An optional cover letter has its own toggle and text import; its card action appears
-only after letter text is saved. Cancel leaves the saved resume unchanged. Download
-uses a selected local folder and exports the entered CV plus any enabled cover letter
-through the existing PDF pipeline. It does not add a JD file or commit the input.
+Paste or import six-field CV JSON; a status bar validates it before **Save & Export**.
+This saves the queue resume, copies differing company/title labels, and exports
+the CV plus any enabled cover letter through the existing PDF pipeline, without
+a JD file. Failed exports can be retried without saving another resume version.
+Cover-letter import accepts `.txt`, `.md`, and text-based `.pdf` files and follows
+its toggle. Cancel leaves the saved resume unchanged.
+Settings → Other includes **Default export root directory**, showing
+the selected folder name. Choose a folder once to use it by default for Studio
+and queue exports; explicit profile and export folder selections take priority.
 Record details open on **Job description**, the first tab, with the complete saved
-description and a link to the original listing. **Details** contains status and
-management actions. The detail heading places Updated to the left of the job title.
+description and a link to the original listing. Queue details keep **Go to apply**
+and **Delete** above the tabs. **Update record** sits on the far right of the tabs
+and enables the form. Details forms use Resume (CV JSON) and Cover letter instead
+of Notes; Candidate and Updated appear at the top right.
+The CV input popup includes **Copy prompt** with instructions for converting a
+resume into six-field JSON. It copies the exact **Resume to structured JSON**
+template also available in Application prompts.
 
 **Apply to Job** opens Details → Autofill → Review inside the dock, using
 `Baseline/apply-to-job-ready-queue-code.html`. Select a Ready job and its employer
@@ -208,7 +233,10 @@ off choice is remembered. The standard dock header remains visible on this page.
 The Apply to Job title sits beside Dashboard. From Job Queues shows one card at
 a time with first/previous/next/last controls, its position, Go to URL and View
 details. View details selects that job in **Application Workspace**. Tailoring
-offers queue JSON import on the left and manual PDF/DOCX upload on the right.
+offers **Import from Queue** on the left and manual PDF/DOCX upload on the right.
+Queue import reads the saved exported resume PDF and uses the same file parser
+as manual uploads. Older resumes without an exported file use a PDF rendered
+from their saved snapshot.
 Five labelled sample jobs are added once per candidate when opening the dock queue
 or Apply view; samples can be removed and cannot submit or update the real profile.
 Candidate labels across the dock, Studio and web pages use complete names;

@@ -11,12 +11,13 @@ import { DOCK_APPLY_OPERATIONS } from '../extension/studio/dock-apply-service.js
 import { DASHBOARD_OPERATIONS } from '../extension/studio/reference-dashboard-access.js';
 
 async function until(check){for(let i=0;i<80;i++){if(await check())return;await delay(10);}throw Error('Expected application state did not arrive.');}
-test('dock Apply browses all queued jobs but starts only Ready jobs and binds a frozen resume to a real form',async t=>{
+test('dock Apply lists only Ready jobs and binds a frozen resume to a real form',async t=>{
   const app=await applyFixture(t),employer=app.employer();
   await assert.rejects(app.request('DOCK_APPLY_START',{jobId:'missing',tabId:7}),/validated resume/);
   const queued=await app.create('queued'),job=await app.ready(await app.create('ready'));
-  const initial=await app.request('DOCK_APPLY_STATE');assert.equal(initial.jobs.length,2);assert.equal(initial.jobs[0].id,job.id);assert.ok(initial.jobs.some(item=>item.id===queued.id));
+  const initial=await app.request('DOCK_APPLY_STATE');assert.equal(initial.jobs.length,1);assert.equal(initial.jobs[0].id,job.id);assert.ok(!initial.jobs.some(item=>item.id===queued.id));
   await assert.rejects(app.start(queued),/validated resume/);
+  await assert.rejects(app.request('DOCK_APPLY_IMPORT',{action:'parse',jobId:queued.id,fileName:'Resume.pdf',base64:btoa('PDF')}),/validated resume/);
   const started=await app.start(job);assert.equal(started.run.jobId,job.id);assert.equal(started.run.tabId,7);
   await app.settled();const state=await app.request('DOCK_APPLY_STATE');
   assert.equal(state.run.phase,'questions');assert.equal(employer.page.document.querySelector('[name="firstName"]').value,'Jordan');assert.equal(employer.page.document.querySelector('[name="email"]').value,'jordan@example.test');assert.equal(employer.uploads(),1);
@@ -25,6 +26,22 @@ test('dock Apply browses all queued jobs but starts only Ready jobs and binds a 
   await assert.rejects(app.request('DOCK_APPLY_SELECT',{candidateId:'candidate-2'}),/cancel the current run/);
   await app.action(state.run,'cancel');const switched=await app.request('DOCK_APPLY_SELECT',{candidateId:'candidate-2'});assert.equal(switched.jobs.length,0);assert.equal(switched.candidate.id,'candidate-2');
   assert.equal(app.tabs.length,0);
+});
+
+test('Apply excludes stale resumes and removes a job when its status stops being Ready',async t=>{
+  const app=await applyFixture(t),ready=await app.ready(await app.create('ready')),stale=await app.ready(await app.create('stale')),failed=await app.create('failed');
+  await app.mutate('fail',failed);
+  const key='dock-job-records:v1',saved=(await app.storage.get(key))[key];saved.jobs.find(job=>job.id===stale.id).resume.inputRevision=0;await app.storage.set({[key]:saved});
+  assert.deepEqual((await app.request('DOCK_APPLY_STATE')).jobs.map(job=>job.id),[ready.id]);
+  await app.mutate('update',ready,{...ready,description:'Changed job description'});
+  assert.equal((await app.request('DOCK_APPLY_STATE')).jobs.length,0);
+});
+
+test('Import from Queue parses the saved PDF file rather than mapping queue JSON',async t=>{
+  const app=await applyFixture(t),job=await app.ready(await app.create());let parsed;
+  app.serviceDeps.readQueueFile=async()=>({resumeBase64:btoa('%PDF saved file'),fileName:'saved-resume.pdf'});
+  app.serviceDeps.parseResume=async file=>{parsed=file;return {skillsData:['Skill from the saved PDF']};};app.restart();
+  const result=await app.request('DOCK_APPLY_IMPORT',{action:'queue-file',jobId:job.id});assert.equal(result.fileName,'saved-resume.pdf');assert.deepEqual(parsed,{base64:btoa('%PDF saved file'),fileName:'saved-resume.pdf'});assert.ok(result.token);assert.deepEqual(result.changes.skills,['Skill from the saved PDF']);assert.equal(app.rendered.length,0);
 });
 
 test('dock answers fill real questions, remember only approved facts, and record a confirmed application once',async t=>{
@@ -77,11 +94,11 @@ test('Apply UI imports no demo runtime, preserves question drafts and returns to
   app.browser.runtime.sendMessage=async message=>{try{return{ok:true,result:await app.request(message.operation,message.payload)};}catch(error){return{ok:false,error:{message:error.message}};}};
   const view=mountApplyDock(host,{browser:app.browser,privateStorage:app.storage,onDashboard:()=>dashboard++,onQueue:()=>queue++});t.after(()=>{view.close();return page.happyDOM.abort();});await view.ready;
   const $=selector=>host.querySelector(selector),click=async selector=>{$(selector).click();await until(()=>view.root.getAttribute('aria-busy')==='false');};
-  assert.equal($('#aj-setup').hidden,false);assert.equal($('#aj-profile').value,'candidate-1');assert.equal($('#aj-prepared-company').textContent,job.company);assert.ok(!APPLY_DOCK_MARKUP.includes('<script'));assert.ok(!APPLY_DOCK_MARKUP.includes('Morgan'));assert.ok(!APPLY_DOCK_MARKUP.includes('Demo'));
+  assert.equal($('#aj-setup').hidden,false);assert.equal($('#aj-profile').textContent,'Test Candidate');assert.equal($('#aj-prepared-company').textContent,job.company);assert.ok(!APPLY_DOCK_MARKUP.includes('<script'));assert.ok(!APPLY_DOCK_MARKUP.includes('Morgan'));assert.ok(!APPLY_DOCK_MARKUP.includes('Demo'));
   assert.equal($('#aj-tailor').checked,true);assert.equal($('#aj-upload').hidden,false);
   assert.equal($('#aj-update-profile').textContent,'Update Test Candidate’s profile');
   $('#aj-target-tab').value='7';$('#aj-target-tab').dispatchEvent(new page.Event('input',{bubbles:true}));
-  await click('#aj-start');await app.settled();await view.show();assert.equal($('#aj-autofill').hidden,false);assert.equal($('#aj-profile').disabled,true);
+  await click('#aj-start');await app.settled();await view.show();assert.equal($('#aj-autofill').hidden,false);assert.equal($('#aj-profile').tagName,'SPAN');
   $('#aj-answer').value='Draft answer retained';$('#aj-answer').dispatchEvent(new page.Event('input',{bubbles:true}));await view.show();assert.equal($('#aj-answer').value,'Draft answer retained');
   await click('[data-step="setup"]');assert.equal($('#aj-setup').hidden,false);assert.equal($('#aj-header-state').textContent,'Draft');assert.equal($('#aj-start').disabled,false);
   assert.ok($('#aj-target-tab').closest('.aj-option-list'));assert.equal($('#aj-rescan').closest('#aj-autofill').id,'aj-autofill');
@@ -104,17 +121,29 @@ test('tailoring defaults on for saved setups and preserves an explicit off choic
   view.close();await page.happyDOM.abort();
 });
 
+test('Apply Dashboard back navigation works during a pending operation and a failed setup save',async t=>{
+  const app=await applyFixture(t);await app.ready(await app.create());
+  const page=new Window(),host=page.document.createElement('div');page.document.body.append(host);let dashboard=0,finishPreview;
+  app.browser.runtime.sendMessage=async message=>{if(message.operation==='DOCK_APPLY_PDF')return new Promise(resolve=>{finishPreview=resolve;});return{ok:true,result:await app.request(message.operation,message.payload)};};
+  const view=mountApplyDock(host,{browser:app.browser,privateStorage:app.storage,onDashboard:()=>dashboard++});t.after(()=>{view.close();return page.happyDOM.abort();});await view.ready;
+  host.querySelector('[data-action="preview-prepared-job"]').click();await until(()=>finishPreview);
+  app.storage.set=async()=>{throw Error('Storage unavailable');};
+  host.querySelector('[data-action="dashboard"]').click();assert.equal(dashboard,1,'Back navigation works while Apply is busy');
+  await delay(10);assert.match(host.querySelector('#aj-feedback').textContent,/Unsaved setup remains/);
+  finishPreview({ok:false,error:{message:'Preview cancelled'}});await delay(10);
+});
+
 test('Dashboard Apply to Job and a Ready queue card open the same dock view without creating web tabs',async t=>{
   const app=await applyFixture(t);app.employer();const job=await app.ready(await app.create());
   const page=new Window(),host=page.document.createElement('div');page.document.body.append(host);
   app.browser.runtime.sendMessage=async message=>{try{return{ok:true,result:message.operation==='DASHBOARD_STATE'?{candidate:await app.deps.profiles.bootstrap(),candidates:await app.deps.profiles.list()}:message.operation.startsWith('DOCK_RECORDS_')?await app.recordsRequest(message.operation,message.payload):await app.request(message.operation,message.payload)};}catch(error){return{ok:false,error:{message:error.message}};}};
   const dock=mountDockDashboard(host,{browser:app.browser,privateStorage:app.storage});t.after(()=>{dock.close();return page.happyDOM.abort();});
-  await delay(20);host.querySelector('[data-action="Apply to Job"]').click();await until(()=>host.querySelector('#aj-profile')?.value==='candidate-1');
+  await delay(20);host.querySelector('[data-action="Apply to Job"]').click();await until(()=>host.querySelector('#aj-profile')?.textContent==='Test Candidate');
   assert.equal(host.querySelector('.rd-main').hidden,true);assert.equal(host.querySelector('#apply-ready-queue-design').hidden,false);assert.equal(app.tabs.length,0);
-  host.querySelector('#apply-ready-queue-design [data-action="job-details"]').click();await until(()=>host.querySelector(`#jr-list [data-record="${job.id}"][data-command="apply"]`));
+  host.querySelector('#apply-ready-queue-design [data-action="job-details"]').click();await until(()=>host.querySelector(`#jr-detail-actions [data-record="${job.id}"][data-command="apply"]`));
   assert.equal(host.querySelector('#apply-ready-queue-design').hidden,true);assert.equal(host.querySelector('#job-records-design').hidden,false);
   await until(()=>host.querySelector('#jr-detail-company').textContent===job.company);
-  host.querySelector(`#jr-list [data-record="${job.id}"][data-command="apply"]`).click();await until(()=>!host.querySelector('#apply-ready-queue-design').hidden);
+  host.querySelector(`#jr-detail-actions [data-record="${job.id}"][data-command="apply"]`).click();await until(()=>!host.querySelector('#apply-ready-queue-design').hidden);
   assert.equal(host.querySelector('#aj-prepared-title').textContent,job.role);assert.equal(host.querySelector('#job-records-design').hidden,true);
   host.querySelector('#apply-ready-queue-design [data-action="dashboard"]').click();await until(()=>!host.querySelector('.rd-main').hidden);assert.equal(app.tabs.length,0);
 });

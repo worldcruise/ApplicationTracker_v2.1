@@ -3,7 +3,7 @@ export function openStudioDock(windowId, browser = globalThis.chrome) {
 }
 
 export async function openDashboard(route = '/', browser = globalThis.chrome) {
-  if (!['/', '/profile', '/profile/new', '/settings', '/settings/profile', '/settings/profile/new', '/settings/prompts', '/resume-studio', '/dashboard', '/meetings'].includes(route)) {
+  if (!['/', '/profile', '/profile/new', '/settings', '/settings/profile', '/settings/profile/new', '/settings/prompts', '/settings/other', '/resume-studio', '/dashboard', '/meetings'].includes(route)) {
     throw new Error(`Unknown ${APP_NAME} page.`);
   }
   const base = browser.runtime.getURL('options.html');

@@ -1,6 +1,6 @@
 import { normalizeProfile, profileName } from './profile-model.js';
 import { openDashboard, openStudioPreview } from './dock.js';
-import { readDashboard, applicationMetrics, applicationSeries, currentWebTab, saveDailyGoal, captureDashboardJob } from './web-dashboard-data.js';
+import { readDashboard, applicationMetrics, applicationSeries, saveDailyGoal } from './web-dashboard-data.js';
 import { createApplicationProgress } from './application-progress.js';
 
 export function createWebDashboard(React, { Chart } = {}) {
@@ -9,11 +9,11 @@ export function createWebDashboard(React, { Chart } = {}) {
   const iconPaths = { document: 'M14 3H5v18h14V9l-5-6M14 3v6h5M9 13h6m-6 4h6', chart: 'M4 20h17M7 16v-5m5 5V5m5 11V8', calendar: 'M5 4h14v17H5zM8 2v4m8-4v4M5 9h14', arrow: 'M5 12h14m-5-5 5 5-5 5' };
   const icon = name => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: iconPaths[name] }));
   return function WebDashboard() {
-    const [snapshot, setSnapshot] = React.useState(null), [name, setName] = React.useState(''), [job, setJob] = React.useState(null), [windowId, setWindowId] = React.useState(null);
+    const [snapshot, setSnapshot] = React.useState(null), [name, setName] = React.useState(''), [windowId, setWindowId] = React.useState(null);
     const [error, setError] = React.useState(''), [pending, setPending] = React.useState(''), [days, setDays] = React.useState(30), [editing, setEditing] = React.useState(false), [goalInput, setGoalInput] = React.useState('');
     const alive = React.useRef(true), busy = React.useRef(false), browser = globalThis.chrome;
     React.useEffect(() => {
-      alive.current = true; let revision = 0, tabRevision = 0;
+      alive.current = true; let revision = 0, windowRevision = 0;
       async function refresh() {
         const current = ++revision;
         try {
@@ -21,15 +21,15 @@ export function createWebDashboard(React, { Chart } = {}) {
           if (alive.current && revision === current) { setSnapshot(data); try { setName(saved.profile ? profileName(normalizeProfile(saved.profile)) : ''); } catch { setName(''); } }
         } catch (cause) { if (alive.current && revision === current) setError(cause.message); }
       }
-      async function refreshTab() {
-        const current = ++tabRevision;
-        try { const window = await browser.windows.getCurrent(), tabs = await browser.tabs.query({ windowId: window.id }); if (alive.current && current === tabRevision) { setWindowId(window.type === 'normal' ? window.id : null); setJob(currentWebTab(tabs)); } }
-        catch { if (alive.current && current === tabRevision) { setWindowId(null); setJob(null); } }
+      async function refreshWindow() {
+        const current = ++windowRevision;
+        try { const window = await browser.windows.getCurrent(); if (alive.current && current === windowRevision) { setWindowId(window.type === 'normal' ? window.id : null); } }
+        catch { if (alive.current && current === windowRevision) { setWindowId(null); } }
       }
       const changed = (changes, area) => { if (area === 'local' && (changes.appliedList || changes.dailyGoal || changes.profile)) refresh(); };
-      refresh(); refreshTab(); browser.storage.onChanged.addListener(changed); browser.tabs.onActivated?.addListener(refreshTab); browser.tabs.onUpdated?.addListener(refreshTab);
-      const timer = setInterval(() => { refresh(); refreshTab(); }, 60000);
-      return () => { alive.current = false; revision++; tabRevision++; clearInterval(timer); browser.storage.onChanged.removeListener(changed); browser.tabs.onActivated?.removeListener(refreshTab); browser.tabs.onUpdated?.removeListener(refreshTab); };
+      refresh(); refreshWindow(); browser.storage.onChanged.addListener(changed);
+      const timer = setInterval(() => { refresh(); refreshWindow(); }, 60000);
+      return () => { alive.current = false; revision++; windowRevision++; clearInterval(timer); browser.storage.onChanged.removeListener(changed); };
     }, []);
     function run(label, action) {
       if (busy.current) return; busy.current = true; setPending(label); setError('');
@@ -49,7 +49,6 @@ export function createWebDashboard(React, { Chart } = {}) {
             h('label', { className: 'web-dashboard-range' }, h('span', { className: 'visually-hidden' }, 'Chart date range'), h('select', { value: days, onChange: event => setDays(Number(event.target.value)) }, [7, 30, 90].map(value => h('option', { key: value, value }, `Last ${value} days`))))),
             snapshot && Chart ? h('div', { className: 'web-dashboard-chart' }, h(Chart, { data: series, bucket: 'day' })) : h('p', { className: 'web-dashboard-empty' }, 'Saved application activity will appear here.')),
           h(Progress, { records, loading: !snapshot }),
-          h('section', { className: 'web-card web-dashboard-job' }, h('span', { className: 'web-eyebrow' }, job?.active ? 'Current tab' : 'Recent job page'), h('h2', null, job?.title || 'Ready for your next opportunity?'), h('p', null, job ? 'Capture this page and tailor your resume in Resume Studio.' : 'Open a job listing to capture its description.'), h('div', { className: 'web-dashboard-job-actions' }, job && h('a', { href: job.url, target: '_blank', rel: 'noopener noreferrer' }, 'View job page'), button('Capture job', () => run('Capturing job', () => captureDashboardJob(job, browser)), true, !job || windowId === null))),
           h('div', { className: 'web-dashboard-actions' }, [['Resume Studio', 'Preview your tailored document', 'document', () => openStudioPreview(windowId, browser)], ['Prompt settings', 'Tune templates and instructions', 'chart', () => openDashboard('/settings/prompts', browser)]].map(([label, detail, symbol, action]) => h('button', { key: label, type: 'button', className: 'web-card web-dashboard-action', disabled: Boolean(pending) || windowId === null, onClick: () => run(`Opening ${label}`, action) }, icon(symbol), h('span', null, h('strong', null, label), h('small', null, detail)), icon('arrow'))))),
         h('aside', { className: 'web-dashboard-side' },
           h('section', { className: 'web-card web-dashboard-goal' }, h('header', { className: 'web-card-heading' }, h('h2', null, 'Daily goal'), button(goal ? 'Edit' : 'Set goal', () => { setGoalInput(String(goal || 10)); setEditing(true); }, false, !snapshot)),

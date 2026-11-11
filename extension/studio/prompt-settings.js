@@ -715,12 +715,8 @@ function PromptSettings() {
   const [state, setState] = useState(null), [editing, setEditing] = useState(null);
   const [editRevision, setEditRevision] = useState(0), [busy, setBusy] = useState(false), [message, setMessage] = useState(null);
   const [promptView, setPromptView] = useState("resume"), [resumeFeedback, setResumeFeedback] = useState(null);
-  const [selectionScope, setSelectionScope] = useState("profile");
   const saving = useRef(false), epoch = useRef(0), alive = useRef(true);
   const editor = useCandidateEditor(state?.candidate ?? null);
-  useEffect(() => {
-    if (state && !state.candidate) setSelectionScope("default");
-  }, [state?.candidate?.document.candidate.id]);
   const fail2 = (error) => {
     if (alive.current) setMessage({
       key: "settings",
@@ -750,7 +746,7 @@ function PromptSettings() {
     };
   }, []);
   const assigned = object2(state?.candidate?.document.applicationPreferences).assignedPromptTemplateId;
-  const selectedId = selectionScope === "profile" && typeof assigned === "string" && assigned ? assigned : state?.library.selectedId;
+  const selectedId = typeof assigned === "string" && assigned ? assigned : state?.library.selectedId;
   const unavailable = Boolean(state && !state.library.templates.some((item) => item.id === selectedId));
   const selected = state?.library.templates.find((item) => item.id === selectedId) ?? state?.library.templates.find((item) => item.id === state.library.selectedId) ?? DEFAULT_PROMPT;
   function edit(patch) {
@@ -768,7 +764,7 @@ function PromptSettings() {
       const expectedRevision = editor.base?.revision;
       const result = await candidateRequest("PROMPT_SELECT", {
         templateId,
-        candidateId: selectionScope === "profile" ? state.candidate?.document.candidate.id ?? null : null,
+        candidateId: state.candidate?.document.candidate.id ?? null,
         expectedCandidateRevision: expectedRevision,
         expectedLibraryRevision: state.library.revision,
         mutationId: crypto.randomUUID()
@@ -845,13 +841,7 @@ function PromptSettings() {
         },
         onFeedback: setResumeFeedback,
         toolbar: /* @__PURE__ */ jsxs("div", { className: "prompt-picker-row", children: [
-          /* @__PURE__ */ jsxs("label", { children: [
-            "Apply selection to",
-            /* @__PURE__ */ jsxs("select", { value: selectionScope, disabled: busy || Boolean(editing), onChange: (event) => setSelectionScope(event.target.value), children: [
-              /* @__PURE__ */ jsx("option", { value: "profile", disabled: !state?.candidate, children: "This profile" }),
-              /* @__PURE__ */ jsx("option", { value: "default", children: "Default for all profiles" })
-            ] })
-          ] }),
+          /* @__PURE__ */ jsx("button", { type: "button", className: "button button-secondary", disabled: !state || busy || Boolean(editing), "aria-label": "Preview and edit prompt", onClick: () => edit({}), children: "Edit prompt" }),
           /* @__PURE__ */ jsxs("label", { children: [
             "Saved template",
             /* @__PURE__ */ jsxs("select", { value: unavailable ? selectedId : selected.id, disabled: !state || busy || Boolean(editing), onChange: (event) => void select2(event.target.value), children: [
@@ -886,13 +876,200 @@ function PromptSettings() {
   ] });
 }
 
+// src/prompts/default-export-root.tsx
+import { studioStorage as studioStorage2 } from "./storage.js";
+
+// extension/studio/queue-export-folder.js
+var DATABASE = "application-tracker-export-files-v1";
+function createQueueDirectoryStore(indexedDB = globalThis.indexedDB) {
+  async function transact(store, mode, action) {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(DATABASE, 1);
+      request.onupgradeneeded = () => {
+        for (const name of ["roots", "preferences", "receipts"]) if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name);
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(store, mode), request = action(tx.objectStore(store));
+        tx.oncomplete = () => resolve(request.result);
+        tx.onerror = tx.onabort = () => reject(tx.error || Error("Folder selection could not be saved."));
+      });
+    } finally {
+      db.close();
+    }
+  }
+  const root = (id) => transact("roots", "readonly", (store) => store.get(id));
+  return {
+    root,
+    async matching(candidateId, preference) {
+      const id = await transact("preferences", "readonly", (store) => store.get(JSON.stringify([candidateId, preference])));
+      return id ? root(id) : null;
+    },
+    async bind(record) {
+      await transact("roots", "readwrite", (store) => store.put(record, record.id));
+      await transact("preferences", "readwrite", (store) => store.put(record.id, JSON.stringify([record.candidateId, record.preference])));
+    },
+    async remember(record) {
+      await transact("roots", "readwrite", (store) => store.add(record, record.id));
+    }
+  };
+}
+
+// extension/studio/default-export-root.js
+var DEFAULT_EXPORT_ROOT_KEY = "default-export-root:v1";
+async function saveDefaultExportRoot(handle, storage, store = createQueueDirectoryStore()) {
+  const root = { id: crypto.randomUUID(), candidateId: "default", name: handle.name, preference: handle.name, handle };
+  await store.remember(root);
+  const value = { id: root.id, name: root.name };
+  await storage.set({ [DEFAULT_EXPORT_ROOT_KEY]: value });
+  return value;
+}
+
+// src/prompts/default-export-root.tsx
+function DefaultExportRoot() {
+  const [value, setValue] = useState(null), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  useEffect(() => {
+    let alive = true;
+    const read = () => studioStorage2.get(DEFAULT_EXPORT_ROOT_KEY).then((saved) => {
+      if (alive) setValue(saved[DEFAULT_EXPORT_ROOT_KEY] || null);
+    }).catch((error) => {
+      if (alive) setMessage(error.message);
+    });
+    void read();
+    const changed = (changes) => {
+      if (changes[DEFAULT_EXPORT_ROOT_KEY]) void read();
+    };
+    studioStorage2.onChanged.addListener(changed);
+    return () => {
+      alive = false;
+      studioStorage2.onChanged.removeListener(changed);
+    };
+  }, []);
+  async function choose() {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      if (typeof window.showDirectoryPicker !== "function") throw Error("Folder selection is unavailable in this browser.");
+      const handle = await window.showDirectoryPicker({ id: "default-export-root", mode: "readwrite" });
+      setValue(await saveDefaultExportRoot(handle, studioStorage2));
+      setMessage("Default export root saved.");
+    } catch (error) {
+      if (error.name !== "AbortError") setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxs("section", { className: "setup-group default-export-root", "aria-labelledby": "default-export-root-label", children: [
+    /* @__PURE__ */ jsx("h3", { id: "default-export-root-label", children: "Default export root directory" }),
+    /* @__PURE__ */ jsx("p", { children: "Use this folder for exports unless a different folder is selected." }),
+    /* @__PURE__ */ jsxs("div", { className: "prompt-picker-row", children: [
+      /* @__PURE__ */ jsxs("label", { children: [
+        "Root directory",
+        /* @__PURE__ */ jsx("input", { value: value?.name || "", readOnly: true, placeholder: "Choose a root directory", "aria-label": "Default export root directory value" })
+      ] }),
+      /* @__PURE__ */ jsx("button", { type: "button", className: "button button-secondary", disabled: busy, onClick: () => void choose(), children: "Choose folder" })
+    ] }),
+    message && /* @__PURE__ */ jsx("p", { role: "status", children: message })
+  ] });
+}
+
+// extension/studio/meeting-timezone.js
+var MEETING_TIMEZONE_KEY = "meeting-timezone:v1";
+function resolveMeetingTimezone(value) {
+  if (value && value !== "system") try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return value;
+  } catch {
+  }
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+function meetingTimezones(value) {
+  const commonUS = ["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Phoenix", "America/Anchorage", "Pacific/Honolulu"];
+  const otherUS = /* @__PURE__ */ new Set(["America/Adak", "America/Boise", "America/Detroit", "America/Indianapolis", "America/Louisville", "America/Juneau", "America/Metlakatla", "America/Nome", "America/Sitka", "America/Yakutat", "America/Menominee", "America/Puerto_Rico", "America/St_Thomas", "Pacific/Guam", "Pacific/Saipan", "Pacific/Pago_Pago"]);
+  const zones = [.../* @__PURE__ */ new Set([...commonUS, "UTC", resolveMeetingTimezone(value), ...Intl.supportedValuesOf?.("timeZone") || ["Europe/London", "Europe/Paris", "Asia/Kolkata", "Asia/Tokyo", "Australia/Sydney"]])].sort();
+  const regionalUS = zones.filter((zone) => otherUS.has(zone) || /^America\/(Indiana|Kentucky|North_Dakota)\//.test(zone));
+  const prioritized = /* @__PURE__ */ new Set([...commonUS, ...regionalUS]);
+  return [...prioritized, ...zones.filter((zone) => !prioritized.has(zone))];
+}
+
+// src/prompts/meeting-timezone-settings.tsx
+function MeetingTimezoneSettings() {
+  const [value, setValue] = useState("system"), [busy, setBusy] = useState(true), [message, setMessage] = useState("");
+  useEffect(() => {
+    let alive = true;
+    const changed = (changes, area) => {
+      if (alive && area === "local" && changes[MEETING_TIMEZONE_KEY]) setValue(changes[MEETING_TIMEZONE_KEY].newValue || "system");
+    };
+    chrome.storage.onChanged.addListener(changed);
+    chrome.storage.local.get(MEETING_TIMEZONE_KEY).then((saved) => {
+      if (alive) setValue(saved[MEETING_TIMEZONE_KEY] || "system");
+    }).catch((error) => {
+      if (alive) setMessage(error.message);
+    }).finally(() => {
+      if (alive) setBusy(false);
+    });
+    return () => {
+      alive = false;
+      chrome.storage.onChanged.removeListener(changed);
+    };
+  }, []);
+  async function change(next) {
+    setBusy(true);
+    setMessage("");
+    try {
+      await chrome.storage.local.set({ [MEETING_TIMEZONE_KEY]: next });
+      setValue(next);
+      setMessage("Meeting timezone saved.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const zones = meetingTimezones(value);
+  return /* @__PURE__ */ jsxs("section", { className: "setup-group meeting-timezone-settings", "aria-labelledby": "meeting-timezone-title", children: [
+    /* @__PURE__ */ jsx("h3", { id: "meeting-timezone-title", children: "Meeting timezone" }),
+    /* @__PURE__ */ jsx("p", { children: "Use this timezone to display and edit meeting dates and times." }),
+    /* @__PURE__ */ jsxs("label", { children: [
+      "Timezone",
+      /* @__PURE__ */ jsxs("select", { "aria-label": "Meeting timezone", value, disabled: busy, onChange: (event) => void change(event.target.value), children: [
+        /* @__PURE__ */ jsxs("option", { value: "system", children: [
+          "Browser timezone (",
+          resolveMeetingTimezone("system"),
+          ")"
+        ] }),
+        zones.map((zone) => /* @__PURE__ */ jsx("option", { value: zone, children: zone.replaceAll("_", " ") }, zone))
+      ] })
+    ] }),
+    message && /* @__PURE__ */ jsx("p", { role: "status", children: message })
+  ] });
+}
+
+// src/prompts/other-settings.tsx
+function OtherSettings() {
+  return /* @__PURE__ */ jsxs("section", { className: "prompt-settings", "aria-labelledby": "other-settings-title", children: [
+    /* @__PURE__ */ jsx("header", { className: "settings-pane-heading", children: /* @__PURE__ */ jsx("h2", { id: "other-settings-title", children: "Other" }) }),
+    /* @__PURE__ */ jsx(MeetingTimezoneSettings, {}),
+    /* @__PURE__ */ jsx(DefaultExportRoot, {})
+  ] });
+}
+
 // src/prompts/index.ts
 function createPromptSettings(React) {
   setReact(React);
   return PromptSettings;
 }
+function createOtherSettings(React) {
+  setReact(React);
+  return OtherSettings;
+}
 export {
   buildPrompt,
+  createOtherSettings,
   createPromptSettings,
   templateIssue
 };

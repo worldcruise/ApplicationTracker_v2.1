@@ -53,7 +53,7 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
         candidateName: meta.candidateName || record.profileName || 'Saved profile', company: record.companyName || 'Company not provided', role: record.jobTitle || 'Untitled role',
         url: safeJobUrl(record.jobLink), status: String(record.status || 'applied').toLowerCase().replace('screening','screen').replace('failed','archived'),
         createdAt: record.date, updatedAt: meta.updatedAt || record.date, notes: meta.notes || '', description: meta.description || '', conversationUrl: meta.conversationUrl || '',
-        resume: meta.resume || null, events: meta.events || [{ label: 'Application recorded', at: record.date }], syncWarning: meta.syncWarning || '',
+        resume: meta.resume || null, coverLetterRaw:meta.coverLetterRaw??meta.resume?.coverLetterRaw??'',coverLetterEnabled:meta.coverLetterEnabled??!!meta.resume?.coverLetterEnabled,events: meta.events || [{ label: 'Application recorded', at: record.date }], syncWarning: meta.syncWarning || '',
         sourceIndex: index, alias };
     }).filter(Boolean);
   }
@@ -102,6 +102,15 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
     }
     return { saved, candidate: await profiles.get(record.candidateId), opened: await openStudio(windowId) };
   }
+  async function documents(record,input){
+    if(typeof input.cvJsonRaw!=='string')return {};
+    const coverLetterRaw=text(input.coverLetterRaw||'',128*1024,'cover-letter text'),coverLetterEnabled=input.coverLetterEnabled===true;
+    if(coverLetterEnabled&&!coverLetterRaw)fail('INVALID_LETTER','Enter cover-letter text or turn Cover letter off.');
+    if(!input.cvJsonRaw.trim())return {resume:null,coverLetterRaw,coverLetterEnabled};
+    const candidate=await profiles.bootstrap();if(!candidate)fail('CANDIDATE_REQUIRED','Select a candidate before updating documents.');
+    const {draft,snapshot}=await resumeEditor.prepare({...record,candidateId:record.candidateId||candidate.id},input);
+    return {coverLetterRaw,coverLetterEnabled,resume:{cvJsonRaw:draft.cvJsonRaw,coverLetterRaw,coverLetterEnabled,documentTemplate:draft.documentTemplate,snapshot,inputRevision:record.inputRevision||1,candidateRevision:candidate.revision,version:(record.resume?.version||0)+1,savedAt:now()}};
+  }
   async function mutate(saved, payload) {
     const action = payload.action;
     if (typeof payload.mutationId !== 'string' || !payload.mutationId || payload.mutationId.length > 128) fail('INVALID_REQUEST', 'A mutation ID is required.');
@@ -112,7 +121,15 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
       return { ...await state(saved), selectedId: receipt.id };
     }
     let selectedId = payload.id;
-    if (action === 'create') {
+    if(action==='create-application'){
+      const candidate=await profiles.bootstrap();if(!candidate)fail('CANDIDATE_REQUIRED','Create a candidate profile in Settings before adding applications.');
+      const input=payload.fields||{},company=text(input.company,300,'a company name',true),role=text(input.role,500,'a role',true),jobLink=input.url?url(input.url):'';
+      const meta={candidateId:candidate.id,candidateName:candidate.document.candidate.name,notes:text(input.notes||'',10000,'notes'),description:text(input.description||'',160000,'a job description'),conversationUrl:conversation(input.conversationUrl||''),revision:1,updatedAt:now(),events:[{label:'Application added manually',at:now()}]};
+      const raw=await rawApplications(),entry={id:crypto.randomUUID(),jobTitle:role,companyName:company,jobLink,companyLink:jobLink?new URL(jobLink).origin:'',date:new Date(now()).toString(),status:'applied',profileName:candidate.profile.profileName};
+      await browser.storage.local.set({appliedList:[entry,...raw]});
+      try{await syncApplication(entry);}catch{meta.syncWarning='Saved locally. Remote sync could not complete.';}
+      const record=applications(saved,[entry])[0];selectedId=record.id;saved.applications[record.id]={...meta,sourceAnchor:anchor(entry)};saved.aliases[record.alias]=record.id;
+    } else if (action === 'create') {
       if (saved.jobs.filter(item => !item.isMock&&!item.deletedAt && !item.applicationId).length >= 500) fail('QUEUE_LIMIT', 'The queue supports up to 500 active jobs.');
       const candidate = await profiles.bootstrap();
       if (!candidate) fail('CANDIDATE_REQUIRED', 'Create a candidate profile in Settings before adding jobs.');
@@ -121,11 +138,18 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
       if (duplicate) fail('DUPLICATE_JOB', 'This job is already in the candidate’s queue.');
       const library = await prompts.read(), templateId = candidate.document.applicationPreferences?.assignedPromptTemplateId || library.selectedId;
       const record = { id: crypto.randomUUID(), type: 'queue', candidateId: candidate.id, candidateName: candidate.document.candidate.name, candidateRevision: candidate.revision,
-        company: text(input.company,300,'a company name',true), role: text(input.role,500,'a role',true), url: jobUrl,
+        company: text(input.company,300,'a company name',true), role: text(input.role,500,'a role',true), salary:text(input.salary||'',200,'a salary'),url: jobUrl,
         description: text(input.description,160000,'a job description',true), notes: text(input.notes || '',10000,'notes'), conversationUrl: conversation(input.conversationUrl || ''),
         promptTemplateId: templateId, promptSnapshot: structuredClone(library.templates.find(item => item.id === templateId) || library.templates.find(item => item.id === library.selectedId)),
         status: 'Queued', revision: 1, inputRevision: 1, attempt: 0, resume: null, resumeHistory: [], createdAt: now(), updatedAt: now(), events: [{ label: 'Job added to queue', at: now() }] };
       saved.jobs.unshift(record); selectedId = record.id;
+    } else if (action === 'delete-all') {
+      const candidate=await profiles.bootstrap();
+      if(!candidate||payload.candidateId!==candidate.id)fail('CANDIDATE_CONFLICT','Select the same candidate before clearing the queue.');
+      const targets=saved.jobs.filter(record=>record.candidateId===candidate.id&&!record.deletedAt&&!record.applicationId);
+      if(!Array.isArray(payload.jobs)||payload.jobs.length!==targets.length||targets.some(record=>!payload.jobs.some(item=>item.id===record.id&&item.revision===record.revision)))fail('CONFLICT','The queue changed. Refresh it before deleting all jobs.');
+      for(const record of targets){record.deletedAt=now();touch(record,'Job removed');}
+      selectedId=null;
     } else if (payload.type === 'applications') {
       if (action !== 'update') fail('INVALID_REQUEST', 'Only application updates are supported here.');
       const raw = await rawApplications(), record = applications(saved, raw).find(item => item.id === payload.id);
@@ -133,9 +157,9 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
       if (record.revision !== payload.expectedRevision) fail('CONFLICT', 'The application changed. Your edits are retained; reload the saved record before trying again.');
       const input = payload.fields || {}, status = input.status;
       if (!APPLICATION_STAGES.includes(status)) fail('INVALID_STATUS', 'Choose an available application stage.');
-      const previous = saved.applications[record.id] || {};
+      const previous = saved.applications[record.id] || {},attachments=await documents(record,input);
       const meta = { ...previous, sourceAnchor:anchor(raw[record.sourceIndex]), notes: text(input.notes || '',10000,'notes'), conversationUrl: conversation(input.conversationUrl || ''), revision: (previous.revision || 0) + 1, updatedAt: now(),
-        events: [{ label: status === record.status ? 'Record updated' : `Status changed to ${status}`, at: now() }, ...record.events] };
+        ...attachments,events: [{ label: status === record.status ? 'Record updated' : `Status changed to ${status}`, at: now() }, ...record.events] };
       const nextRaw = { ...raw[record.sourceIndex], status };
       // Re-read before committing; a stale dock must never replace web edits.
       const latest = await rawApplications();
@@ -159,14 +183,17 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
         record.resume={cvJsonRaw:draft.cvJsonRaw,coverLetterRaw:draft.coverLetterRaw,coverLetterEnabled:draft.coverLetterEnabled,documentTemplate:draft.documentTemplate,
           snapshot,inputRevision:record.inputRevision,candidateRevision:candidate.revision,version:record.resumeHistory.length+1,savedAt:now()};
         record.candidateName=candidate.document.candidate.name;record.status='Ready';record.error='';touch(record,'Resume updated from CV input');
+        record.coverLetterRaw=draft.coverLetterRaw;record.coverLetterEnabled=draft.coverLetterEnabled;
       }else if (action === 'update') {
         const fields = payload.fields || {}, description = text(fields.description,160000,'a job description',true), jobUrl = url(fields.url);
+        const attachments=await documents(record,fields);
         const changed = description !== record.description || jobUrl !== record.url;
-        Object.assign(record, { description, url: jobUrl, notes: text(fields.notes || '',10000,'notes'), conversationUrl: conversation(fields.conversationUrl || '') });
+        Object.assign(record, { description, url: jobUrl, salary:fields.salary===undefined?record.salary||'':text(fields.salary,200,'a salary'),notes: text(fields.notes || '',10000,'notes'), conversationUrl: conversation(fields.conversationUrl || '') });
         if (changed) { record.inputRevision++; record.status = 'Queued'; if (record.resume) record.resumeHistory.unshift(record.resume); record.resume = null; record.error = ''; }
+        if('resume' in attachments){if(record.resume)record.resumeHistory.unshift(record.resume);Object.assign(record,attachments);if(record.resume){record.resume.inputRevision=record.inputRevision;record.status='Ready';record.error='';}else if(record.status==='Ready')record.status='Queued';}
         touch(record, changed ? 'Job inputs changed; prepare a new resume' : 'Record updated');
       } else if (action === 'delete') {
-        record.deletedAt = now(); touch(record, record.isMock?'Sample job removed':'Job removed'); selectedId = null;
+        record.deletedAt = now(); touch(record, record.isMock?'Job removed':'Job removed'); selectedId = null;
       } else if (action === 'restore') {
         if (!record.deletedAt) fail('INVALID_STATE', 'This job has already been restored.');
         delete record.deletedAt; touch(record, 'Job restored');
@@ -177,7 +204,7 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
         if (!['Queued','Generating'].includes(record.status)) fail('INVALID_STATE', 'Only an unfinished job can be marked failed.');
         record.status = 'Failed'; record.error = text(payload.error || 'Resume preparation was interrupted.',2000,'an error description'); touch(record, 'Resume preparation failed');
       } else if (action === 'apply') {
-        if(record.isMock)fail('SAMPLE_JOB','Sample jobs are for preview. Add a real job before recording an application.');
+        if(record.isMock)fail('SAMPLE_JOB','Preview jobs cannot be used for applications. Add a real job before recording an application.');
         if (record.status !== 'Ready' || !record.resume || record.resume.inputRevision !== record.inputRevision) fail('INVALID_STATE', 'Save a current, validated resume before marking this job applied.');
         const candidate = await profiles.get(record.candidateId);
         if (!candidate) fail('CANDIDATE_REQUIRED', 'The candidate profile is no longer available.');
@@ -213,13 +240,13 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
       const current=await drafts.bootstrap(candidate.id),base=current.record.draft;
       const samples=QUEUE_SAMPLES.map(sample=>{
         const id=`sample:${candidate.id}:${sample.key}`,url=`https://example.com/sample-jobs/${sample.key}`,cv=sampleResume(candidate,sample),cvJsonRaw=JSON.stringify(cv);
-        const parsed=validateResume(cvJsonRaw);if(!parsed.value)fail('INVALID_CV','The sample resume could not be prepared.');
+        const parsed=validateResume(cvJsonRaw);if(!parsed.value)fail('INVALID_CV','The resume could not be prepared.');
         const draft={...base,jobInputRaw:`${url}\n${sample.description}`,cvJsonRaw,coverLetterRaw:'',coverLetterEnabled:false,bindings:{experience:[],education:[]}};
         const snapshot=makeSnapshot(candidate,draft,`sample:${candidate.id}`,1).snapshot;
         return {id,type:'queue',isMock:true,candidateId:candidate.id,candidateName:candidate.document.candidate.name,candidateRevision:candidate.revision,
-          company:sample.company,role:sample.role,url,description:sample.description,notes:'Sample job for previewing the queue interface.',conversationUrl:'',status:'Ready',revision:1,inputRevision:1,attempt:0,
+          company:sample.company,role:sample.role,url,description:sample.description,notes:'Job for previewing the queue interface.',conversationUrl:'',status:'Ready',revision:1,inputRevision:1,attempt:0,
           resume:{cvJsonRaw,coverLetterRaw:'',coverLetterEnabled:false,documentTemplate:draft.documentTemplate,snapshot,inputRevision:1,candidateRevision:candidate.revision,version:1,savedAt:now()},
-          resumeHistory:[],createdAt:now(),updatedAt:now(),events:[{label:'Sample job added',at:now()}]};
+          resumeHistory:[],createdAt:now(),updatedAt:now(),events:[{label:'Job added',at:now()}]};
       });
       saved.jobs.push(...samples);saved.sampleCandidates={...saved.sampleCandidates,[candidate.id]:true};await write(saved);return state(saved);
     }
@@ -229,13 +256,24 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
     if(operation==='DOCK_RECORDS_CV_INPUT'){
       if(record.applicationId)fail('INVALID_STATE','Open an active queue job to update its resume.');
       if(payload.action==='validate'){const result=await resumeEditor.inspect(record,payload);return {candidate:result.candidate,validation:result.validation};}
+      if(payload.action==='preview'){
+        const {draft,snapshot}=await resumeEditor.prepare(record,payload);
+        await prepareStudio({...record,resume:{cvJsonRaw:draft.cvJsonRaw,coverLetterRaw:draft.coverLetterRaw,coverLetterEnabled:draft.coverLetterEnabled,documentTemplate:draft.documentTemplate,snapshot}},payload.windowId,true);
+        return {opened:true};
+      }
       if(!resumeExports)fail('EXPORT_UNAVAILABLE','Resume download is unavailable.');
-      if(payload.action==='export-status')return resumeExports.status(record,payload.ticketId);
+      if(payload.action==='export-status'){
+        const ticket=await resumeExports.status(record,payload.ticketId),file=ticket.files?.find(item=>item.kind==='cv');
+        if(record.resume?.export?.ticketId===payload.ticketId&&file?.state==='complete'&&file.filename){record.resume.export={...record.resume.export,fileName:file.filename,state:'complete'};await write(saved);}
+        return ticket;
+      }
       if(payload.action==='export-retry')return resumeExports.retry(record,payload.ticketId,payload.kind);
       if(payload.action==='export'){
         const {draft,snapshot,letter}=await resumeEditor.prepare(record,payload);
-        return resumeExports.start(record,{ticketId:payload.ticketId,bindingId:payload.bindingId,selection:{snapshot,draftRevision:draft.revision,jobInputRaw:'',cvJsonRaw:draft.cvJsonRaw,
-          coverLetterEnabled:draft.coverLetterEnabled,coverLetterRaw:draft.coverLetterRaw,letter,renderedAt:now(),omitJobDescription:true}});
+        const selection={snapshot,draftRevision:draft.revision,jobInputRaw:'',cvJsonRaw:draft.cvJsonRaw,coverLetterEnabled:draft.coverLetterEnabled,coverLetterRaw:draft.coverLetterRaw,letter,renderedAt:now(),omitJobDescription:true};
+        const ticket=await resumeExports.start(record,{ticketId:payload.ticketId,bindingId:payload.bindingId,selection});
+        if(record.resume?.cvJsonRaw===draft.cvJsonRaw&&selection.destination){const file=ticket.files?.find(item=>item.kind==='cv');record.resume.export={ticketId:ticket.id,bindingId:selection.destination.bindingId,companyFolder:selection.destination.companyFolder,fileName:file?.filename||'',state:file?.state||'pending'};await write(saved);}
+        return ticket;
       }
       fail('INVALID_REQUEST','Choose a CV input action.');
     }
@@ -244,7 +282,7 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
       await prepareStudio(record,payload.windowId,true);
       return {...await state(saved),selectedId:record.id};
     }
-    if(record.isMock)fail('SAMPLE_JOB','Sample jobs are for preview. Add a real job to prepare a resume.');
+    if(record.isMock)fail('SAMPLE_JOB','Preview jobs cannot be used for applications. Add a real job to prepare a resume.');
     if (operation === 'DOCK_RECORDS_STUDIO') {
       if (record.applicationId) fail('INVALID_STATE', 'Open a queued job to prepare a resume.');
       await prepareStudio(record, payload.windowId);

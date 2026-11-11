@@ -60,14 +60,9 @@ export function createStudioSelectors(React, storage = studioStorage) {
       }
     }
 
-    const choices = candidates.some(item => item.id === id) || !id ? candidates : [{ id, name: candidate.document.candidate.name }, ...candidates];
     return h('div', { className: 'studio-selector-bar', 'aria-busy': saving },
       h('div', { className: 'studio-selector-row' },
-        h('label', { htmlFor: 'studio-candidate' }, 'Candidate',
-          h('select', { id: 'studio-candidate', value: id, disabled: disabled || saving || !choices.length,
-            onChange: event => onCandidateChange(event.target.value) },
-          !id && h('option', { value: '' }, 'Select candidate'),
-          choices.map(item => h('option', { key: item.id, value: item.id }, item.name)))),
+        h('div', { className:'studio-active-profile' },h('span',null,'Profile'),h('strong',null,candidate?.document.candidate.name||'Create your profile in Settings')),
         h('label', { htmlFor: 'studio-prompt' }, 'Prompt',
           h('select', { id: 'studio-prompt', value: selected, disabled: disabled || saving || !library,
             'aria-describedby': error ? 'studio-selector-error' : undefined,

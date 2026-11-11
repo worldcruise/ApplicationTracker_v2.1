@@ -122,11 +122,15 @@
 #at-reference-dock:has(#apply-ready-queue-design:not([hidden])) { padding:0; }
 #at-reference-dock .rd-dock:has(#apply-ready-queue-design:not([hidden])) { max-width:none; border:0; border-radius:0; overflow:visible; background:transparent; color-scheme:inherit; }
 body.reference-dashboard:has(#apply-ready-queue-design:not([hidden])) { min-height:100dvh; background:var(--reference-dashboard-bg); }
-#at-reference-dock #apply-ready-queue-design { color-scheme:inherit; -webkit-font-smoothing:antialiased; background-image:radial-gradient(circle,color-mix(in srgb,var(--aj-text) 14%,transparent) .8px,transparent .8px); background-position:center; background-size:16px 16px; }
+#at-reference-dock #apply-ready-queue-design { margin:0; padding:0; border:0; color-scheme:inherit; -webkit-font-smoothing:antialiased; background-image:radial-gradient(circle,color-mix(in srgb,var(--aj-text) 14%,transparent) .8px,transparent .8px); background-position:center; background-size:16px 16px; }
+#at-reference-dock #apply-ready-queue-design .aj-window { max-width:none; margin:0; border:0; border-radius:0; }
+#at-reference-dock #apply-ready-queue-design .aj-body { margin:0; padding:0; border:0; }
+#at-reference-dock #apply-ready-queue-design :is(.aj-card,.aj-context,.aj-steps) { margin:0; border:0; }
 #at-reference-dock #apply-ready-queue-design .aj-primary,#at-reference-dock #apply-ready-queue-design .aj-step[aria-current=step]>span,#at-reference-dock #apply-ready-queue-design .aj-toggle:checked { background:var(--color-accent-solid); color:var(--color-on-accent); }
-#at-reference-dock #apply-ready-queue-design .aj-navigation { display:flex; align-items:center; gap:12px; max-width:430px; margin:0 auto 10px; }
+#at-reference-dock #apply-ready-queue-design .aj-navigation { display:flex; align-items:center; gap:12px; max-width:none; margin:0; padding:0 var(--dock-gutter,13px) 10px; border:0; }
 #at-reference-dock #apply-ready-queue-design .aj-navigation h2 { margin:0; font-size:18px; font-weight:500; letter-spacing:-.5px; line-height:1.3; }
 #at-reference-dock #apply-ready-queue-design .aj-navigation #aj-header-state { margin-left:auto; }
+#at-reference-dock #apply-ready-queue-design .aj-profile-name { display:block; padding:9px 10px; border:1px solid var(--aj-line); border-radius:8px; color:var(--aj-text); background:var(--aj-bg); overflow-wrap:anywhere; }
 #at-reference-dock #apply-ready-queue-design .aj-job-pager { display:inline-flex; align-items:center; gap:2px; margin-left:auto; }
 #at-reference-dock #apply-ready-queue-design .aj-job-pager button { display:grid; place-items:center; width:23px; height:28px; padding:0; border:1px solid var(--aj-line); border-radius:5px; background:var(--aj-bg); color:var(--aj-text); }
 #at-reference-dock #apply-ready-queue-design .aj-job-pager svg { width:14px; height:14px; }

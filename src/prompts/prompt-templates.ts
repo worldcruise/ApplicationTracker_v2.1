@@ -1,6 +1,7 @@
 import { CandidateError, object } from "./candidate-contract";
 type Coordinate = <T>(task: () => Promise<T>) => Promise<T>;
 import { editableTemplate, templateIssue } from "./prompt-composer";
+import { RESUME_JSON_TEMPLATE } from '../../extension/studio/resume-json-prompt.js';
 
 export type PromptTemplate = { id: string; title: string; text: string };
 export type PromptLibrary = { revision: number; selectedId: string; templates: PromptTemplate[] };
@@ -19,10 +20,11 @@ export function createPromptRepository(storage: Pick<chrome.storage.LocalStorage
   async function read(): Promise<PromptLibrary> {
     await storage.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
     const value = (await storage.get(PROMPT_LIBRARY_KEY))[PROMPT_LIBRARY_KEY] as PromptLibrary | undefined;
-    if (!value) return { revision: 0, selectedId: DEFAULT_PROMPT.id, templates: [structuredClone(DEFAULT_PROMPT)] };
-    if (!Number.isSafeInteger(value.revision) || value.revision < 1 || !Array.isArray(value.templates) || !value.templates.length || value.templates.length > 20) throw new CandidateError("INVALID_PROMPT_LIBRARY", "The saved prompt library could not be read.");
+    if (!value) return { revision: 0, selectedId: DEFAULT_PROMPT.id, templates: [structuredClone(DEFAULT_PROMPT), structuredClone(RESUME_JSON_TEMPLATE)] };
+    if (!Number.isSafeInteger(value.revision) || value.revision < 1 || !Array.isArray(value.templates) || !value.templates.length || value.templates.length > 21) throw new CandidateError("INVALID_PROMPT_LIBRARY", "The saved prompt library could not be read.");
     const templates = value.templates.map(validatePrompt);
     if (new Set(templates.map(item => item.id)).size !== templates.length || !templates.some(item => item.id === value.selectedId)) throw new CandidateError("INVALID_PROMPT_LIBRARY", "The saved prompt library is inconsistent.");
+    if (!templates.some(item => item.id === RESUME_JSON_TEMPLATE.id)) templates.push(structuredClone(RESUME_JSON_TEMPLATE));
     return { ...value, templates };
   }
   return {
@@ -33,7 +35,7 @@ export function createPromptRepository(storage: Pick<chrome.storage.LocalStorage
       const template = validatePrompt(input.template), exists = library.templates.some(item => item.id === template.id);
       const issue = templateIssue(template.text, false);
       if (issue) throw new CandidateError("INVALID_PROMPT", issue);
-      if (!exists && library.templates.length >= 20) throw new CandidateError("PROMPT_LIMIT", "The prompt library supports up to 20 templates.");
+      if (!exists && library.templates.filter(item=>item.id!==RESUME_JSON_TEMPLATE.id).length >= 20) throw new CandidateError("PROMPT_LIMIT", "The prompt library supports up to 20 templates.");
       const next = { ...library, revision: library.revision + 1, templates: exists ? library.templates.map(item => item.id === template.id ? template : item) : [...library.templates, template] };
       await storage.set({ [PROMPT_LIBRARY_KEY]: next }); return next;
     }),

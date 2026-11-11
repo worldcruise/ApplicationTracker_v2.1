@@ -22,11 +22,11 @@ async function rebuild() {
 try {
   await buildExtension();
   const changed = (event, filename) => {
-    if (String(filename).replaceAll('\\', '/') === 'studio/prompt-settings.js') return;
+    if (['studio/prompt-settings.js','content-scripts/inline-dock.js'].includes(String(filename).replaceAll('\\', '/'))) return;
     clearTimeout(timer);
     timer = setTimeout(() => { rebuild(); }, 200);
   };
-  const watchers = [extensionRoot, path.join(projectRoot, 'src/prompts')].map(root => watch(root, { recursive: true }, changed));
+  const watchers = [extensionRoot, path.join(projectRoot, 'src')].map(root => watch(root, { recursive: true }, changed));
   watchers.push(watch(path.join(projectRoot, 'Baseline/application-tracker-dock.html'), changed));
   for (const watcher of watchers) watcher.on('error', error => {
     console.error(`Watch failed: ${error.message}`);

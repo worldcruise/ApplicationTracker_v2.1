@@ -1,4 +1,5 @@
 import { normalizeProfile, profileName, profileToStudio, studioExtras, studioToProfile } from './profile-model.js';
+import {defaultExportRoot,DEFAULT_EXPORT_ROOT_KEY} from './default-export-root.js';
 
 const prefix = 'autofill-profile:';
 const activeKey = 'active-candidate:v1';
@@ -19,7 +20,12 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
   function check(record, revision) { if (!record || record.revision !== revision) fail('CONFLICT', 'The saved profile changed. Reload it before saving your edits.', record?.revision); }
   const read = async id => (await storage.get(keyFor(id)))[keyFor(id)] || null;
   const records = async () => Object.entries(await storage.get(null)).filter(([key]) => key.startsWith(prefix)).map(([, record]) => record);
-  const project = record => record ? { ...structuredClone(record), document: profileToStudio(record.profile, record.id, record.studio) } : null;
+  const project = async record => {
+    if(!record)return null;
+    const result={...structuredClone(record),document:profileToStudio(record.profile,record.id,record.studio)};
+    if(!result.document.applicationPreferences?.exportDirectory){const root=await defaultExportRoot(record.id,storage);if(root)result.document.applicationPreferences={...result.document.applicationPreferences,exportDirectory:root.preference};}
+    return result;
+  };
 
   async function write(id, profile, studio, previous, filename, mutationId) {
     const now = new Date().toISOString();
@@ -86,10 +92,10 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
   }
   const api = {
     bootstrap: () => queue(async () => project(await syncCurrent())),
-    list: (options={}) => queue(async () => { await syncCurrent(); return (await records()).map(record => ({ id: record.id, name: profileName(record.profile),...options.includeProfileName?{profileName:record.profile.profileName}:{} })).sort((a, b) => a.name.localeCompare(b.name)); }),
+    list: (options={}) => queue(async () => { const record=await syncCurrent();return record?[{id:record.id,name:profileName(record.profile),...options.includeProfileName?{profileName:record.profile.profileName}:{}}]:[]; }),
     get: id => queue(async () => { await syncCurrent(); return project(await read(id)); }),
     select: id => queue(async () => {
-      await syncCurrent();
+      const active=await syncCurrent();if(active?.id!==id)fail('SINGLE_PROFILE','This account uses one profile. Replace its resume or update Profile in Settings.');
       const applyRuns=Object.entries(await storage.get(null)).filter(([key])=>key.startsWith('dock-apply-run:v1:')).map(([,run])=>run);
       if(applyRuns.some(run=>run?.candidateId!==id&&!['cancelled','submitted'].includes(run?.phase)))fail('RUN_ACTIVE','Finish or cancel the dock’s application run before changing profiles.');
       const record = await read(id);
@@ -103,6 +109,7 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
       if (typeof input.raw !== 'string' || new TextEncoder().encode(input.raw).length > 2 * 1024 * 1024 || typeof input.filename !== 'string' || !input.filename || input.filename.length > 255) fail('INVALID_REQUEST', 'Choose a profile JSON file up to 2 MiB.');
       let value;
       try { value = JSON.parse(input.raw); } catch { fail('INVALID_PROFILE', 'The profile file is not valid JSON.'); }
+      const active=await syncCurrent();
       let id, profile, studio;
       try {
         if (value?.kind === 'application-tracker-candidate') {
@@ -116,11 +123,13 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
           id = existing?.id || crypto.randomUUID(); studio = existing?.studio || {};
         }
       } catch (error) { fail('INVALID_PROFILE', error.message); }
+      if(active){id=active.id;studio={...active.studio,...studio};}
       const previous = await read(id), same = previous && equal(previous.profile, profile) && equal(previous.studio, studio);
       if (previous?.lastMutationId === input.mutationId && !same) fail('MUTATION_CONFLICT', 'This operation ID was already used for different profile content.');
       if (previous && !same) {
         if (input.replaceRevision === undefined) fail('REPLACEMENT_REQUIRED', 'A different profile with this identity is saved. Review it before replacement.', previous.revision);
         check(previous, input.replaceRevision);
+        await storage.set({[`profile-backup:replacement:${previous.id}:${previous.revision}`]:previous});
       }
       const record = same ? previous : await write(id, profile, studio, previous, input.filename, input.mutationId);
       await activate(record);
@@ -128,10 +137,12 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
     }),
     save: input => queue(async () => {
       await syncCurrent(); mutation(input.mutationId);
-      const document = validateLegacy(input.document);
+      const document = structuredClone(validateLegacy(input.document));
       if (document.candidate.id !== input.candidateId) fail('IDENTITY_CHANGED', 'The profile ID cannot change during editing.');
       const previous = await read(input.candidateId);
       if (!previous) fail('NOT_FOUND', 'The profile is no longer available.');
+      // Saving other profile edits must not turn an inherited root into an override.
+      if(!previous.studio?.applicationPreferences?.exportDirectory){const root=(await storage.get(DEFAULT_EXPORT_ROOT_KEY))[DEFAULT_EXPORT_ROOT_KEY];if(root?.name&&document.applicationPreferences?.exportDirectory===root.name)delete document.applicationPreferences.exportDirectory;}
       const profile = studioToProfile(document, previous.profile, previous.studio), studio = studioExtras(document, profile);
       if (previous.lastMutationId === input.mutationId) {
         if (!equal(previous.profile, profile) || !equal(previous.studio, studio)) fail('MUTATION_CONFLICT', 'This operation ID was already used for different profile content.');
@@ -151,6 +162,13 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
       const record=await write(previous.id,profile,previous.studio,previous,null,input.mutationId);
       if((await storage.get(activeKey))[activeKey]===record.id)await activate(record);
       return project(record);
+    }),
+    replaceProfile:input=>queue(async()=>{
+      const previous=await syncCurrent();mutation(input.mutationId);
+      if(previous)check(previous,input.expectedRevision);else if(input.expectedRevision!==null)fail('CONFLICT','The profile changed. Reload Profile and try again.');
+      const profile=normalizeProfile(input.profile),id=previous?.id||crypto.randomUUID();
+      if(previous)await storage.set({[`profile-backup:replacement:${id}:${previous.revision}`]:previous});
+      const record=await write(id,profile,previous?.studio||{},previous,input.filename,input.mutationId);await activate(record);return project(record);
     }),
     delete: input => queue(async () => {
       await syncCurrent();

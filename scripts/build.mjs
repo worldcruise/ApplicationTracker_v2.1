@@ -5,6 +5,7 @@ import { buildPrompts } from './build-prompts.mjs';
 import { buildReferenceDashboard } from './build-reference-dashboard.mjs';
 import { buildJobRecords } from './build-job-records.mjs';
 import { buildApplyDock } from './build-apply-dock.mjs';
+import { buildInlineDock } from './build-inline-dock.mjs';
 import { distRoot, extensionRoot, isMain, outputRoot, projectRoot } from './paths.mjs';
 
 async function assertGeneratedDirectory(target) {
@@ -27,6 +28,7 @@ export async function buildExtension() {
   await buildReferenceDashboard();
   await buildJobRecords();
   await buildApplyDock();
+  await buildInlineDock();
   const result = await checkExtension(extensionRoot, { quiet: true });
   await mkdir(distRoot, { recursive: true });
   const actual = await realpath(distRoot);

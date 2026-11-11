@@ -18,5 +18,6 @@ export async function buildPrompts() {
   const code = result.outputFiles[0].text;
   const previous = await readFile(target, 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; });
   if (previous !== code) await writeFile(target, code);
+  await build({absWorkingDir:projectRoot,entryPoints:[path.join(root,'prompt-templates.ts')],outfile:path.join(projectRoot,'extension/studio/prompt-repository.js'),bundle:true,format:'esm',platform:'browser',target:'chrome116'});
 }
 if (isMain(import.meta.url)) buildPrompts().catch(error => { console.error(error.message); process.exitCode = 1; });

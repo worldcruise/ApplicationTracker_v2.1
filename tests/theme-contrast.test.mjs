@@ -90,7 +90,7 @@ test('dock job records use readable light and dark cards, form fields and status
   }
 });
 
-test('dock Apply retains reference geometry while inheriting the application theme and readable controls',async()=>{
+test('dock Apply keeps borderless framing, reference controls and readable application themes',async()=>{
   const styles=(await Promise.all(['extension/studio/theme.css','extension/dashboard.css','extension/apply-dock.css'].map(file=>readFile(file,'utf8')))).join('\n');
   const outer=new Window(),reference=new Window();outer.document.body.innerHTML=await readFile('Baseline/apply-to-job-ready-queue-code.html','utf8');reference.document.body.innerHTML=outer.document.querySelector('iframe').getAttribute('data-srcdoc');
   const authored=reference.document.querySelector('#apply-ready-queue-design'),sourceStyles=[...authored.querySelectorAll('style')].map(node=>node.textContent).join('\n');
@@ -99,10 +99,10 @@ test('dock Apply retains reference geometry while inheriting the application the
     const window=new Window();window.document.documentElement.dataset.theme=theme;window.document.head.innerHTML=`<style>${styles}</style>`;window.document.body.innerHTML=DASHBOARD_MARKUP;
     window.document.querySelector('.rd-main').innerHTML=APPLY_DOCK_MARKUP;
     assert.equal(window.getComputedStyle(window.document.querySelector('.rd-header')).display,'flex','Apply retains the default dock header');
-    for(const[text,background]of [['.aj-navigation h2','.aj-window'],['.aj-label','.aj-card'],['.aj-small','.aj-card'],['#aj-profile'],['#aj-answer'],['#aj-start'],['.aj-badge.good'],['[data-action="import-queue-json"]'],['[data-action="manual-upload"]'],['[data-action="job-next"]']])check(window,text,background,`${theme} Apply ${text}`);
+    for(const[text,background]of [['.aj-navigation h2','.aj-window'],['.aj-label','.aj-card'],['.aj-small','.aj-card'],['#aj-profile'],['#aj-answer'],['#aj-start'],['.aj-badge.good'],['[data-action="import-queue-file"]'],['[data-action="manual-upload"]'],['[data-action="job-next"]']])check(window,text,background,`${theme} Apply ${text}`);
     reference.document.head.innerHTML=`<style>${sourceStyles.replace(/light-dark\((#[\da-f]+),(#[\da-f]+)\)/gi,(_,light,dark)=>theme==='light'?light:dark)}</style>`;reference.document.body.innerHTML=sourceMarkup;
     for(const [selector,properties]of [
-      ['.aj-window',['borderRadius','maxWidth']],['.aj-header h2',['fontSize','fontWeight']],
+      ['.aj-header h2',['fontSize','fontWeight']],
       ['.aj-prepared-head',['display','gridTemplateColumns','gap']],['.aj-prepared-document',['display','marginTop','paddingTop']],
       ['.aj-prepared-option',['borderRadius','padding']],['.aj-primary',['fontSize','padding','borderRadius']],
       ['#aj-profile',['padding','borderRadius']],['.aj-import-review',['display','gap','padding']],
@@ -114,6 +114,8 @@ test('dock Apply retains reference geometry while inheriting the application the
       if(!actualNode)window.document.querySelector('.aj-prepared-job').append(actual);if(!expectedNode)reference.document.querySelector('#aj-job-picker').append(expected);
       for(const property of properties)assert.equal(window.getComputedStyle(actual)[property],reference.getComputedStyle(expected)[property],`${theme} ${selector} ${property} matches the authored reference`);
     }
+    const frame=window.getComputedStyle(window.document.querySelector('.aj-window'));
+    for(const [property,value]of Object.entries({borderRadius:'0px',maxWidth:'none',margin:'0px',borderWidth:'0px'}))assert.equal(frame[property],value,`${theme} Apply frame keeps the requested edge-to-edge layout`);
     const dock=window.getComputedStyle(window.document.querySelector('#at-reference-dock')),app=window.getComputedStyle(window.document.documentElement);
     for(const [selector,property,token,source]of [
       ['.aj-window','backgroundColor','--rd-bg',dock],['.aj-card','backgroundColor','--rd-panel',dock],

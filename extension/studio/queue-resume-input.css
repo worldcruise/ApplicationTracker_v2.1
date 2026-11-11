@@ -15,6 +15,12 @@ body.reference-dashboard:has(#jr-cv-dialog[open]) { overflow:hidden; }
 #job-records-design .jr-cv-modal .editor-card textarea[aria-invalid=true] { color:var(--color-ink); background:var(--color-field); border-color:var(--color-danger-border); box-shadow:inset 0 0 0 1px var(--color-danger-border); }
 #job-records-design .jr-cv-modal .cv-company { color:var(--color-muted); }
 #job-records-design .jr-cv-letter-actions { display:flex; align-items:center; gap:5px; }
+#job-records-design .jr-cv-json-actions { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+#job-records-design .jr-cv-modal .cv-card .section-heading { flex-wrap:wrap; }
+#job-records-design .jr-cv-json-actions { margin-left:auto; flex-wrap:wrap; justify-content:flex-end; max-width:100%; }
+#job-records-design .jr-cv-modal .jr-copy-prompt { min-height:29px; padding:4px 7px; font-size:10px; }
+#job-records-design .jr-prompt-comment { margin:0; font-size:11px; line-height:1.5; color:var(--color-muted); }
+#job-records-design .jr-cv-modal [data-cv-action^="import-"] { display:inline-flex; width:auto; gap:5px; padding:4px 6px; font-size:10px; white-space:nowrap; }
 #job-records-design .jr-cv-modal .letter-switch { flex-shrink:0; color:var(--color-ink); background:var(--color-button-fill); border-color:var(--color-button-border); }
 #job-records-design .jr-cv-modal .letter-switch span { background:var(--color-muted); }
 #job-records-design .jr-cv-modal .letter-switch[aria-checked=true] span { background:var(--color-accent-solid); }

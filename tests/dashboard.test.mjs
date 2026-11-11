@@ -69,7 +69,7 @@ test('web navigation retains SpeedyApply pages alongside the v2 dashboard and St
   context.route = '/settings/autofill';
   assert.ok(!text(context.op()).includes('Feedback'));
   assert.ok(!nodes(context.op()).some(node => node.props.className === 'autofill-dock-theme'));
-  assert.deepEqual(nodes(context.iy()).filter(node => node.type === 'Link').map(text), ['Profile', 'Prompt settings', 'Autofill', 'Premium']);
+  assert.deepEqual(nodes(context.iy()).filter(node => node.type === 'Link').map(text), ['Profile', 'Prompt settings', 'Autofill', 'Other', 'Premium']);
   const router = between('function KL(){', 'Af.createRoot(');
   assert.ok(router.includes('path:`dashboard`'));
   assert.ok(router.includes('path:`resume-studio`'));

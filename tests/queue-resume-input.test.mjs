@@ -8,6 +8,8 @@ import {JOB_RECORD_ICONS} from '../extension/studio/job-records-markup.js';
 import {createQueueResumeExports} from '../extension/studio/queue-resume-export.js';
 import {createQueueDirectoryStore} from '../extension/studio/queue-export-folder.js';
 import {IDBFactory} from 'fake-indexeddb';
+import {RESUME_JSON_PROMPT,RESUME_JSON_COMMENT} from '../extension/studio/resume-json-prompt.js';
+import {saveDefaultExportRoot} from '../extension/studio/default-export-root.js';
 
 const cv=(company='Updated Company',title='Updated Role')=>({company,title,summary:'Prepared summary.',skills:[{Engineering:['JavaScript']}],experience:[],education:[]});
 const input=(company,title)=>({cvJsonRaw:JSON.stringify(cv(company,title)),coverLetterRaw:'',coverLetterEnabled:false});
@@ -33,6 +35,15 @@ test('invalid JSON or an enabled empty cover letter cannot overwrite a saved que
   const f=await dockFixture(t),record=await f.ready(await f.create());
   for(const fields of [{...input(),cvJsonRaw:'{broken'},{...input(),coverLetterEnabled:true}])await assert.rejects(f.mutate('update-resume',record,fields),{code:'INVALID_CV'});
   assert.deepEqual((await f.request('DOCK_RECORDS_STATE')).jobs[0],record);
+});
+
+test('completed exports retain the saved PDF reference on the matching queue resume',async t=>{
+  const f=await dockFixture(t),job=await f.ready(await f.create());
+  f.deps.resumeExports={start:async(record,options)=>{options.selection.destination={bindingId:'root',companyFolder:'Employer'};return {id:options.ticketId,files:[{kind:'cv',state:'pending'}]};},status:async()=>({files:[{kind:'cv',state:'complete',filename:'resume.pdf'}]})};f.restart();
+  const payload={id:job.id,expectedRevision:job.revision,windowId:41,ticketId:'saved-export',bindingId:'root',cvJsonRaw:job.resume.cvJsonRaw,coverLetterRaw:'',coverLetterEnabled:false};
+  await f.request('DOCK_RECORDS_CV_INPUT',{...payload,action:'export'});
+  await f.request('DOCK_RECORDS_CV_INPUT',{...payload,action:'export-status'});
+  assert.deepEqual((await f.request('DOCK_RECORDS_STATE')).jobs[0].resume.export,{ticketId:'saved-export',bindingId:'root',companyFolder:'Employer',fileName:'resume.pdf',state:'complete'});
 });
 
 test('CV downloads freeze just the entered CV and optional letter without committing edits',async t=>{
@@ -61,25 +72,76 @@ test('queue folder handles use the Studio store without changing the Studio fold
 
 async function modal(t){
   const f=await dockFixture(t),page=new Window(),host=page.document.createElement('div');page.document.body.append(host);let updated,chosen=0;const roots=new Map();
-  const directoryStore={root:async id=>roots.get(id),matching:async()=>null,remember:async root=>roots.set(root.id,root)};
+  const directoryStore={root:async id=>roots.get(id),matching:async()=>null,remember:async root=>roots.set(root.id,root),bind:async root=>roots.set(root.id,root)};
   page.showDirectoryPicker=()=>{chosen++;return Promise.resolve({name:'Selected folder',queryPermission:async()=> 'granted'});};
+  f.deps.resumeExports={start:async(record,options)=>({id:options.ticketId,phase:'settled',pending:false,message:'Saved',files:[{kind:'cv',state:'complete',filename:'resume.pdf'}]})};f.restart();
   const ui=mountQueueResumeInput(host,{request:f.request,privateStorage:f.storage,getWindowId:()=>41,onUpdated:next=>{updated=next;},icons:JOB_RECORD_ICONS,directoryStore});t.after(()=>{ui.close();return page.happyDOM.abort();});
   const $=selector=>host.querySelector(selector),enter=(selector,value)=>{const node=$(selector);node.value=value;node.dispatchEvent(new page.Event('input',{bubbles:true}));};
-  return {...f,page,ui,$,enter,get updated(){return updated;},get chosen(){return chosen;}};
+  return {...f,page,ui,$,enter,directoryStore,get updated(){return updated;},get chosen(){return chosen;}};
 }
 
 test('CV modal validates inputs, keeps its letter toggle separate, updates the record and cancels further edits',async t=>{
   const app=await modal(t),job=await app.create();await app.ui.open(job);assert.equal(app.$('#jr-cv-heading').textContent,'CV input');assert.equal(app.$('#jr-cv-update').disabled,true);assert.equal(app.$('#jr-cv-letter').hidden,true);assert.equal(app.$('#jr-cv-dialog').querySelector('[id*="job-description"]'),null);
   app.enter('#jr-cv-input',JSON.stringify(cv()));await until(()=>!app.$('#jr-cv-update').disabled);app.$('#jr-cv-letter-toggle').click();assert.equal(app.$('#jr-cv-letter').hidden,false);await until(()=>app.$('#jr-cv-status').dataset.state==='error');
-  app.enter('#jr-cv-letter','A separately imported cover letter.');await until(()=>!app.$('#jr-cv-update').disabled);app.$('#jr-cv-update').click();await until(()=>app.updated);
+  app.enter('#jr-cv-letter','A separately imported cover letter.');await until(()=>!app.$('#jr-cv-update').disabled);app.$('[data-cv-action="folder"]').click();await until(()=>app.$('#jr-cv-folder-name').value==='Selected folder');app.$('#jr-cv-update').click();await until(()=>app.updated);await until(()=>app.$('#jr-cv-dialog').getAttribute('aria-busy')==='false');
   assert.equal(app.updated.jobs[0].company,'Updated Company');assert.equal(app.updated.jobs[0].resume.coverLetterRaw,'A separately imported cover letter.');assert.equal(app.$('#jr-cv-dialog').open,true);
   app.enter('#jr-cv-input','Unsaved changes');app.$('[data-cv-action="cancel"]').click();assert.equal(app.$('#jr-cv-dialog').open,false);assert.equal((await app.request('DOCK_RECORDS_STATE')).jobs[0].resume.cvJsonRaw,JSON.stringify(cv()));
 });
 
-test('modal folder selection feeds a download of the current input without saving the queue job',async t=>{
+test('CV Copy prompt copies the exact shared conversion prompt and shows its explanation',async t=>{
+  const app=await modal(t),job=await app.create();let copied;
+  Object.defineProperty(app.page.navigator,'clipboard',{value:{writeText:async text=>{copied=text;}}});
+  await app.ui.open(job);assert.equal(app.$('#jr-cv-prompt-comment').textContent,RESUME_JSON_COMMENT);
+  app.$('[data-cv-action="copy-prompt"]').click();await until(()=>copied!==undefined);assert.equal(copied,RESUME_JSON_PROMPT);
+});
+
+test('cover-letter toggle controls import, editor and saved state without deleting text',async t=>{
+  const app=await modal(t),job=await app.create();await app.ui.open(job,{letter:true});
+  const upload=()=>app.$('[data-cv-action="import-letter"]'),toggle=()=>app.$('#jr-cv-letter-toggle');
+  assert.equal(toggle().getAttribute('aria-checked'),'false');assert.equal(upload().disabled,true);assert.equal(app.$('#jr-cv-letter-file').disabled,true);
+  app.enter('#jr-cv-input',JSON.stringify(cv()));toggle().click();assert.equal(upload().disabled,false);assert.equal(app.$('#jr-cv-letter').disabled,false);
+  app.enter('#jr-cv-letter','Keep this letter when switched off');toggle().click();assert.equal(upload().disabled,true);assert.equal(app.$('#jr-cv-letter').hidden,true);
+  await until(()=>!app.$('#jr-cv-update').disabled);app.$('[data-cv-action="folder"]').click();await until(()=>app.$('#jr-cv-folder-name').value==='Selected folder');app.$('#jr-cv-update').click();await until(()=>app.updated);await until(()=>app.$('#jr-cv-dialog').getAttribute('aria-busy')==='false');
+  const saved=app.updated.jobs.find(item=>item.id===job.id);assert.equal(saved.resume.coverLetterEnabled,false);assert.equal(saved.resume.coverLetterRaw,'Keep this letter when switched off');
+  await app.ui.open(saved);assert.equal(toggle().getAttribute('aria-checked'),'false');assert.equal(upload().disabled,true);
+  toggle().click();assert.equal(upload().disabled,false);assert.equal(app.$('#jr-cv-letter').value,'Keep this letter when switched off');
+});
+
+test('eye control previews the current unsaved CV in Studio without updating the queue resume',async t=>{
+  const app=await modal(t),job=await app.ready(await app.create()),saved=structuredClone(job.resume),previous=(await app.deps.drafts.read()).draft;let opened=0;
+  app.deps.openStudio=async()=>{opened++;return {tabId:100};};app.restart();
+  await app.ui.open(job);const eye=app.$('[data-cv-action="preview"]');
+  assert.equal(eye.previousElementSibling.dataset.cvAction,'import-cv');
+  app.enter('#jr-cv-input','{invalid');assert.equal(eye.disabled,true);
+  const raw=JSON.stringify(cv('Preview Company'));app.enter('#jr-cv-input',raw);await until(()=>!eye.disabled);
+  eye.click();await until(()=>opened===1);await until(()=>app.$('#jr-cv-dialog').getAttribute('aria-busy')==='false');
+  assert.equal((await app.deps.drafts.read()).draft.cvJsonRaw,raw);
+  assert.deepEqual((await app.request('DOCK_RECORDS_STATE')).jobs.find(item=>item.id===job.id).resume,saved);
+  const backups=await app.storage.get(null);assert.ok(Object.entries(backups).some(([key,value])=>key.startsWith('dock-draft-backup:')&&value.cvJsonRaw===previous.cvJsonRaw));
+});
+
+test('CV export uses the Settings default root and retains an explicitly selected override',async t=>{
+  const app=await modal(t),job=await app.create();
+  await saveDefaultExportRoot({name:'Default exports',queryPermission:async()=> 'granted'},app.storage,app.directoryStore);
+  await app.ui.open(job);assert.equal(app.$('#jr-cv-folder-name').value,'Default exports');assert.equal(app.chosen,0);
+  app.$('[data-cv-action="folder"]').click();await until(()=>app.$('#jr-cv-folder-name').value==='Selected folder');
+  await app.ui.open(job);assert.equal(app.$('#jr-cv-folder-name').value,'Selected folder');
+});
+
+test('Save & Export checks the folder first and retries export without saving a second resume version',async t=>{
+  const app=await modal(t),job=await app.create();let attempts=0;
+  app.deps.resumeExports={start:async(record,options)=>{if(++attempts===1)throw Error('Disk unavailable');return {id:options.ticketId,phase:'settled',pending:false,message:'Saved',files:[]};}};app.restart();
+  await app.ui.open(job);app.enter('#jr-cv-input',JSON.stringify(cv()));await until(()=>!app.$('#jr-cv-update').disabled);
+  app.$('#jr-cv-update').click();await until(()=>app.$('#jr-cv-status-text').textContent.includes('Choose an export folder'));assert.equal((await app.request('DOCK_RECORDS_STATE')).jobs[0].resume,null);
+  app.$('[data-cv-action="folder"]').click();await until(()=>app.$('#jr-cv-folder-name').value==='Selected folder');app.$('#jr-cv-update').click();await until(()=>app.$('#jr-cv-status-text').textContent.includes('Resume saved. Export could not complete'));await until(()=>!app.$('#jr-cv-update').disabled);
+  assert.equal((await app.request('DOCK_RECORDS_STATE')).jobs[0].resume.version,1);
+  app.$('#jr-cv-update').click();await until(()=>attempts===2);await until(()=>app.$('#jr-cv-dialog').getAttribute('aria-busy')==='false');assert.equal((await app.request('DOCK_RECORDS_STATE')).jobs[0].resume.version,1);
+});
+
+test('Save & Export writes the current input and saves the queue resume in one action',async t=>{
   const app=await modal(t),job=await app.create();let downloaded;
   app.deps.resumeExports={start:async(record,options)=>{downloaded=options;return {id:options.ticketId,phase:'settled',pending:false,message:'Saved',files:[{kind:'cv',state:'complete',filename:'resume.pdf'}]};}};app.restart();
   await app.ui.open(job);app.enter('#jr-cv-input',JSON.stringify(cv()));await until(()=>!app.$('#jr-cv-update').disabled);
   app.$('[data-cv-action="folder"]').click();assert.equal(app.chosen,1,'The picker starts synchronously from the user click');await until(()=>app.$('#jr-cv-folder-name').value==='Selected folder');
-  app.$('#jr-cv-download').click();await until(()=>downloaded);assert.ok(downloaded.bindingId);assert.equal(downloaded.selection.snapshot.resume.company,'Updated Company');assert.equal((await app.request('DOCK_RECORDS_STATE')).jobs[0].resume,null);
+  app.$('#jr-cv-update').click();await until(()=>downloaded);assert.ok(downloaded.bindingId);assert.equal(downloaded.selection.snapshot.resume.company,'Updated Company');assert.equal((await app.request('DOCK_RECORDS_STATE')).jobs[0].resume.cvJsonRaw,JSON.stringify(cv()));
 });

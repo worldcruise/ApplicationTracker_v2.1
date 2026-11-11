@@ -7,5 +7,6 @@ export function createQueueDirectoryStore(indexedDB=globalThis.indexedDB){
   }
   const root=id=>transact('roots','readonly',store=>store.get(id));
   return {root,async matching(candidateId,preference){const id=await transact('preferences','readonly',store=>store.get(JSON.stringify([candidateId,preference])));return id?root(id):null;},
+    async bind(record){await transact('roots','readwrite',store=>store.put(record,record.id));await transact('preferences','readwrite',store=>store.put(record.id,JSON.stringify([record.candidateId,record.preference])));},
     async remember(record){await transact('roots','readwrite',store=>store.add(record,record.id));}};
 }
