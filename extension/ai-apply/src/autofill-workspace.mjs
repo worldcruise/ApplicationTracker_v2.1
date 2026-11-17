@@ -147,7 +147,7 @@ export function connectTrackerWorkspace({studio,queue,selectView,selectStudioTab
             if(options.length){input.multiple=!!field.multiple;if(input.multiple)input.size=Math.min(5,Math.max(2,options.length));else{const empty=make('option',null,'Choose an answer');empty.value='';input.append(empty);}for(const option of options){const node=make('option',null,option.label);node.value=option.value;node.disabled=!!option.disabled;input.append(node);}}else input.rows=field.kind==='ai'?2:1;
             setAnswerEditor(input,drafts.get(fieldScope)??currentAnswer(field)??run?.drafts?.[field.key]??'');input.placeholder='Enter or paste your answer';const save=()=>{drafts.set(fieldScope,input.multiple?JSON.stringify([...input.options].filter(option=>option.selected).map(option=>option.value)):input.value);syncAnswerAlert();};input.addEventListener('input',save);input.addEventListener('change',save);
           }
-          caption.htmlFor=input.id;row.append(input);
+          caption.htmlFor=input.id;row.append(input);if(field.optionMessage)row.append(make('p','tracker-form-help',field.optionMessage));
         }
         group.append(row);
       }

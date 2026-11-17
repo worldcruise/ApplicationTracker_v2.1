@@ -86,7 +86,13 @@ export function createChoiceFields(document,{combos,visible}) {
       for(const option of available){check();option.selected=matched.includes(option);}
       node.dispatchEvent(new document.defaultView.Event('input',{bubbles:true,composed:true}));node.dispatchEvent(new document.defaultView.Event('change',{bubbles:true,composed:true}));
     } else {
-      for(const option of available){const target=matched.includes(option);if(disabled(option)||!!chosen(option)===target)continue;check();if(group.kind==='combo'&&!visible(option)){node.click();await new Promise(resolve=>document.defaultView.setTimeout(resolve,0));check();}if(!visible(option))throw Error('Open this question on the employer page to choose its options.');option.click();}
+      for(const previous of available){
+        const target=matched.includes(previous),value=optionValue(previous);if(disabled(previous))continue;
+        let option=nodes(node).find(item=>optionValue(item)===value);if(option&&!!chosen(option)===target)continue;check();
+        if(group.kind==='combo'&&(!option||!visible(option))){node.click();for(let attempt=0;attempt<25;attempt++){await new Promise(resolve=>document.defaultView.setTimeout(resolve,60));check();option=nodes(node).find(item=>optionValue(item)===value&&visible(item));if(option)break;}}
+        if(!option||!visible(option))throw Error('Choose an option');
+        option.click();await new Promise(resolve=>document.defaultView.setTimeout(resolve,0));check();
+      }
     }
     check();const actual=selected(node);if(wanted.length!==actual.length||matched.some(item=>!actual.some(value=>value.value===optionValue(item)||value.value===item.value)))throw Error('The employer did not accept all selected answers. Review this question on its page.');
     return true;

@@ -95,7 +95,7 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "version": "2.1.27",
+  "version": "2.1.30",
   "web_accessible_resources": [
     {
       "resources": [
@@ -144,5 +144,5 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; worker-src 'self'; base-uri 'none'; frame-src 'self' blob: https://chatgpt.com https://chat.deepseek.com;"
   },
-  "version_name": "2.1.27"
+  "version_name": "2.1.30"
 }

@@ -135,15 +135,31 @@
     }
     async function select(node, answer, { check = () => {
     } } = {}) {
+      const identity2 = { id: node.id, name: node.name, caption: fieldText(node) }, typed = /* @__PURE__ */ new WeakSet();
+      const reconnect = () => {
+        if (node.isConnected) return;
+        const candidates = queryFormTree(document2, 'input,[role="combobox"],button[aria-haspopup="listbox"]').filter((item) => isCombo(item) && (identity2.id ? item.id === identity2.id : identity2.name ? item.name === identity2.name : false) && fieldText(item) === identity2.caption);
+        if (candidates.length !== 1) throw Error("The dropdown changed. Choose an option on the employer page.");
+        node = candidates[0];
+      };
       const before = node.value, country = countryField(node), street = streetField(node), editable = node.tagName === "INPUT" && !node.readOnly;
       const query = country && countryKey(answer) === "united states" ? "United States" : answer;
       check();
       node.focus();
       node.click();
       node.dispatchEvent(new win.KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", bubbles: true, composed: true }));
-      if (editable) writeValue(node, query);
+      if (editable) {
+        typed.add(node);
+        writeValue(node, query);
+      }
       const checkQuery = () => {
         check();
+        reconnect();
+        if (editable && !typed.has(node)) {
+          if (node.value && node.value !== query) throw Error("The dropdown changed while it was being filled. Review its answer on the employer page.");
+          typed.add(node);
+          writeValue(node, query);
+        }
         if (!node.isConnected || editable && node.value !== query) throw Error("The dropdown changed while it was being filled. Review its answer on the employer page.");
       };
       let option;
@@ -151,7 +167,7 @@
         checkQuery();
         option = options(node).find((item) => {
           const caption = item.getAttribute("aria-label") || item.textContent;
-          if (!street) return matches(node, caption, answer);
+          if (!street) return item.getAttribute("data-value") === answer || item.getAttribute("value") === answer || matches(node, caption, answer);
           const address = item.querySelector(".pac-item-query")?.textContent || text2(caption).split(",")[0];
           return canonical(address) === canonical(answer) || canonical(caption) === canonical(answer);
         });
@@ -169,7 +185,8 @@
       option.click();
       await new Promise((resolve) => win.setTimeout(resolve, 0));
       check();
-      proofs.set(node, { label: selectedLabel, inputValue: node.value });
+      reconnect();
+      if (node.value && node.value !== query && node.getAttribute("aria-expanded") !== "true") proofs.set(node, { label: selectedLabel, inputValue: node.value });
       if (!value(node)) throw Error("The employer dropdown did not accept this answer. Choose its option on the application page.");
     }
     return { isCombo, value, options, select, matches, root, menus };
@@ -483,17 +500,25 @@
         node.dispatchEvent(new document2.defaultView.Event("input", { bubbles: true, composed: true }));
         node.dispatchEvent(new document2.defaultView.Event("change", { bubbles: true, composed: true }));
       } else {
-        for (const option of available) {
-          const target = matched.includes(option);
-          if (disabled(option) || !!chosen(option) === target) continue;
+        for (const previous of available) {
+          const target = matched.includes(previous), value = optionValue(previous);
+          if (disabled(previous)) continue;
+          let option = nodes(node).find((item) => optionValue(item) === value);
+          if (option && !!chosen(option) === target) continue;
           check();
-          if (group.kind === "combo" && !visible(option)) {
+          if (group.kind === "combo" && (!option || !visible(option))) {
             node.click();
-            await new Promise((resolve) => document2.defaultView.setTimeout(resolve, 0));
-            check();
+            for (let attempt = 0; attempt < 25; attempt++) {
+              await new Promise((resolve) => document2.defaultView.setTimeout(resolve, 60));
+              check();
+              option = nodes(node).find((item) => optionValue(item) === value && visible(item));
+              if (option) break;
+            }
           }
-          if (!visible(option)) throw Error("Open this question on the employer page to choose its options.");
+          if (!option || !visible(option)) throw Error("Choose an option");
           option.click();
+          await new Promise((resolve) => document2.defaultView.setTimeout(resolve, 0));
+          check();
         }
       }
       check();
@@ -528,8 +553,12 @@
     }
     const combos = createComboboxController(document2, { visible, writeValue });
     const choices = createChoiceFields(document2, { combos, visible });
+    const choiceErrors = /* @__PURE__ */ new Map();
     function key(node) {
-      if (!ids.has(node)) ids.set(node, `field-${++serial}`);
+      if (!ids.has(node)) {
+        const previous = [...nodes].find(([, old]) => !old.isConnected && old.tagName === node.tagName && (node.id ? old.id === node.id : node.name && old.name === node.name) && (node.id || label(old) === label(node)));
+        ids.set(node, previous?.[0] || `field-${++serial}`);
+      }
       const id = ids.get(node);
       nodes.set(id, node);
       return id;
@@ -574,6 +603,7 @@
           ...choice,
           label: fieldLabel(node),
           ...choice ? { filled: choice.filled && valid(node) } : {},
+          ...choiceErrors.has(key(node)) && !hasValue(node) ? { optionMessage: "Choose an option" } : {},
           required: !!(node.required || choice?.required || /\*/.test(fieldLabel(node)) || node.getAttribute("aria-required") === "true" || node.type === "file" && node.closest('[aria-required="true"]') !== null || radios?.some((other) => other.required))
         };
       });
@@ -673,12 +703,14 @@
             if (node.type === "checkbox" && !choices.has(node) && !message.edits?.[key(node)] && !saved[`${type}:${normalize(fieldLabel(node)).toLowerCase()}`]) continue;
             const value = message.edits?.[key(node)] || (/cover.?letter/i.test(label(node)) ? message.coverLetter?.text : "") || profileFieldAnswer(node, profile, fieldLabel(node)) || saved[`${type}:${normalize(fieldLabel(node)).toLowerCase()}`];
             if (value) try {
+              choiceErrors.delete(key(node));
               await set(node, String(value), () => check(runId));
             } catch {
+              if (choices.has(node) || combos.isCombo(node) || node.tagName === "SELECT") choiceErrors.set(key(node), true);
             }
           }
           await new Promise((resolve) => win.setTimeout(resolve, 0));
-          if (node.type === "file") reconnect();
+          reconnect();
         }
         check(runId);
         return scan();

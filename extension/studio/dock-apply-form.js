@@ -20,7 +20,8 @@ export function createApplyForm(document, { uploadResume } = {}) {
   }
   const combos=createComboboxController(document,{visible,writeValue});
   const choices=createChoiceFields(document,{combos,visible});
-  function key(node) { if(!ids.has(node)) ids.set(node,`field-${++serial}`); const id=ids.get(node);nodes.set(id,node);return id; }
+  const choiceErrors=new Map();
+  function key(node) { if(!ids.has(node)){const previous=[...nodes].find(([,old])=>!old.isConnected&&old.tagName===node.tagName&&(node.id?old.id===node.id:node.name&&old.name===node.name)&&(node.id||label(old)===label(node)));ids.set(node,previous?.[0]||`field-${++serial}`);} const id=ids.get(node);nodes.set(id,node);return id; }
   const sameRadioGroup=(node,other)=>other.type==='radio'&&other.name===node.name&&other.form===node.form&&other.getRootNode()===node.getRootNode();
   function controls() {
     const raw=queryFormTree(document,'input,textarea,select,[role="combobox"],[role="listbox"],[role="radiogroup"],button[aria-haspopup="listbox"]').filter(node=>(combos.isCombo(node)||!['hidden','password','submit','button','reset','image'].includes(node.type))&&(!node.readOnly||combos.isCombo(node))&&
@@ -37,7 +38,7 @@ export function createApplyForm(document, { uploadResume } = {}) {
       const selected=radios?.find(other=>other.checked),choice=choices.info(node);
       return { id:key(node),canAutofill:(node.type!=='checkbox'||!!choice)&&node.type!=='file'&&!!profileFieldAnswer(node,candidateProfile,fieldLabel(node)),kind:/\bwhy\b|\bdescribe\b|\btell us\b|\bcover letter\b|\bmotivat/i.test(fieldLabel(node))?'ai':'fact',type:node.tagName==='BUTTON'?'select-one':node.type,
         filled:radios?!!selected:hasValue(node)&&valid(node),...node.type==='file'&&uploadErrors.has(node)?{uploadError:uploadErrors.get(node)}:{},answer:radios?(selected?.value||''):node.type==='file'?uploadedName(node):node.type==='checkbox'?(node.checked?'Yes':''):combos.isCombo(node)?combos.value(node):String(node.value||'').slice(0,10000),options:radios?radios.map(other=>({value:other.value,label:label(other)})):node.tagName==='SELECT'?[...node.options].map(option=>({value:option.value,label:option.textContent,...option.disabled?{disabled:true}:{}})):combos.isCombo(node)?combos.options(node).map(option=>({value:option.getAttribute('data-value')||option.textContent,label:option.textContent})):[],
-        ...choice,label:fieldLabel(node),...choice?{filled:choice.filled&&valid(node)}:{},required:!!(node.required||choice?.required||/\*/.test(fieldLabel(node))||node.getAttribute('aria-required')==='true'||node.type==='file'&&node.closest('[aria-required="true"]')!==null||radios?.some(other=>other.required)) };
+        ...choice,label:fieldLabel(node),...choice?{filled:choice.filled&&valid(node)}:{},...choiceErrors.has(key(node))&&!hasValue(node)?{optionMessage:'Choose an option'}:{},required:!!(node.required||choice?.required||/\*/.test(fieldLabel(node))||node.getAttribute('aria-required')==='true'||node.type==='file'&&node.closest('[aria-required="true"]')!==null||radios?.some(other=>other.required)) };
     });
   }
   function check(runId) { if(!currentRun||currentRun!==runId)throw Error('This form belongs to another autofill run.');if(paused)throw Error('Resume the paused run first.'); }
@@ -75,10 +76,10 @@ export function createApplyForm(document, { uploadResume } = {}) {
             uploadErrors.delete(node);uploadProofs.set(label(node),file.fileName);
             if(uploadResume)await uploadResume(node,file);else {const raw=file.resumeBase64.replace(/^data:[^,]*;base64,/i,''),bytes=Uint8Array.from(win.atob(raw),char=>char.charCodeAt(0)),transfer=new win.DataTransfer();transfer.items.add(new win.File([bytes],file.fileName,{type:mime}));Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype,'files').set.call(node,transfer.files);node.dispatchEvent(new win.Event('input',{bubbles:true,composed:true}));node.dispatchEvent(new win.Event('change',{bubbles:true,composed:true}));}
           }catch(error){uploadErrors.set(node,error.message||'The page did not accept this document.');}}
-        } else { const type=choices.info(node)?.type||node.type;if(node.type==='checkbox'&&!choices.has(node)&&!message.edits?.[key(node)]&&!saved[`${type}:${normalize(fieldLabel(node)).toLowerCase()}`])continue;const value=message.edits?.[key(node)]||(/cover.?letter/i.test(label(node))?message.coverLetter?.text:'')||profileFieldAnswer(node,profile,fieldLabel(node))||saved[`${type}:${normalize(fieldLabel(node)).toLowerCase()}`];if(value)try{await set(node,String(value),()=>check(runId));}catch{} }
+        } else { const type=choices.info(node)?.type||node.type;if(node.type==='checkbox'&&!choices.has(node)&&!message.edits?.[key(node)]&&!saved[`${type}:${normalize(fieldLabel(node)).toLowerCase()}`])continue;const value=message.edits?.[key(node)]||(/cover.?letter/i.test(label(node))?message.coverLetter?.text:'')||profileFieldAnswer(node,profile,fieldLabel(node))||saved[`${type}:${normalize(fieldLabel(node)).toLowerCase()}`];if(value)try{choiceErrors.delete(key(node));await set(node,String(value),()=>check(runId));}catch{if(choices.has(node)||combos.isCombo(node)||node.tagName==="SELECT")choiceErrors.set(key(node),true);} }
         // Yield between fields so pause/cancel stops subsequent writes.
         await new Promise(resolve=>win.setTimeout(resolve,0));
-        if(node.type==='file')reconnect();
+        reconnect();
       }
       check(runId);return scan();
     }

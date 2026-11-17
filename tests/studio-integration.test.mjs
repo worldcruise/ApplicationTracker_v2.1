@@ -468,3 +468,21 @@ test('AI Candidate Form persists prompt defaults without changing the base profi
  const reloaded=await request('PROMPT_SETTINGS',{},sender);
  assert.equal(buildPrompt(reloaded.result.candidate.document,'',{id:'defaults',text:'{{candidate_name}} | {{candidate_location}} | {{years_of_experience}} | {{company_1_bullets}}'}).text,'Prompt Candidate | Remote | 8 | 9');
 });
+
+test('Resume Studio website visibility persists and filters rendered links without removing saved profile URLs',async t=>{
+ const {request,chrome,sandbox}=await coordinator(t),loaded=await request('STUDIO_BOOTSTRAP',{}),candidate=loaded.result.record?.candidate||loaded.result.candidate;
+ const initial=candidate||(await request('PROMPT_SETTINGS',{}, {id:chrome.runtime.id,url:chrome.runtime.getURL('options.html#/settings/ai/prompt'),frameId:0})).result.candidate;
+ const document=structuredClone(initial.document);document.personalDetails={...document.personalDetails,onlinePresence:{linkedin:'https://linkedin.com/in/example',github:'https://github.com/example',website:'https://example.test'}};
+ let saved=await request('CANDIDATE_SAVE',{candidateId:initial.id,expectedRevision:initial.revision,document,mutationId:crypto.randomUUID()});assert.equal(saved.ok,true,JSON.stringify(saved.error));const profile=structuredClone(chrome.storage.local.values.profile);
+ assert.deepEqual(Array.from(sandbox.ie(saved.result.candidate).links),Object.values(document.personalDetails.onlinePresence));
+ for(const visibility of [{linkedin:false,github:true,website:false},{linkedin:false,github:false,website:false},{linkedin:true,github:true,website:true}]){
+   const current=saved.result.candidate,next=structuredClone(current.document);next.applicationPreferences={...next.applicationPreferences,resumeWebsiteVisibility:visibility};saved=await request('CANDIDATE_SAVE',{candidateId:current.id,expectedRevision:current.revision,document:next,mutationId:crypto.randomUUID()});assert.equal(saved.ok,true,JSON.stringify(saved.error));assert.deepEqual(Array.from(sandbox.ie(saved.result.candidate).links),Object.entries(document.personalDetails.onlinePresence).filter(([key])=>visibility[key]).map(([,value])=>value));assert.deepEqual(chrome.storage.local.values.profile.websiteData,profile.websiteData);assert.deepEqual(saved.result.candidate.document.applicationPreferences.resumeWebsiteVisibility,visibility);
+ }
+});
+
+test('new Studio drafts use the saved default template and formatting without replacing an existing draft',async t=>{
+ const {request,chrome}=await coordinator(t),settings=await request('PROMPT_SETTINGS',{}, {id:chrome.runtime.id,url:chrome.runtime.getURL('options.html#/settings/ai/prompt'),frameId:0}),candidate=settings.result.candidate,document=structuredClone(candidate.document);
+ document.applicationPreferences={...document.applicationPreferences,preferredDocumentTemplateId:'harvard',defaultDocumentStyle:{documentTemplate:{id:'harvard',version:1},formattingOverrides:{headerAlignment:'right',accentColor:'#6550ce'}}};const saved=await request('CANDIDATE_SAVE',{candidateId:candidate.id,expectedRevision:candidate.revision,document,mutationId:crypto.randomUUID()});assert.equal(saved.ok,true,JSON.stringify(saved.error));await chrome.storage.session.remove('draft:candidate:'+candidate.id);
+ const created=await request('STUDIO_BOOTSTRAP',{candidateId:candidate.id});assert.equal(created.ok,true,JSON.stringify(created.error));assert.equal(created.result.record.draft.documentTemplate.id,'harvard');assert.deepEqual(created.result.record.draft.formattingOverrides,document.applicationPreferences.defaultDocumentStyle.formattingOverrides);
+ const next=structuredClone(saved.result.candidate.document);next.applicationPreferences.defaultDocumentStyle.formattingOverrides.headerAlignment='center';await request('CANDIDATE_SAVE',{candidateId:candidate.id,expectedRevision:saved.result.candidate.revision,document:next,mutationId:crypto.randomUUID()});const reopened=await request('STUDIO_BOOTSTRAP',{candidateId:candidate.id});assert.equal(reopened.result.record.draft.id,created.result.record.draft.id);assert.equal(reopened.result.record.draft.formattingOverrides.headerAlignment,'right');
+});

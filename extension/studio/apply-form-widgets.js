@@ -88,20 +88,29 @@ export function createComboboxController(document,{visible,writeValue}) {
     return optionKey===answerKey||optionKey==='bachelors'&&answerKey.startsWith('bachelor of ')||optionKey==='masters'&&answerKey.startsWith('master of ');
   }
   async function select(node,answer,{check=()=>{}}={}) {
+    const identity={id:node.id,name:node.name,caption:fieldText(node)},typed=new WeakSet();
+    const reconnect=()=>{
+      if(node.isConnected)return;
+      const candidates=queryFormTree(document,'input,[role="combobox"],button[aria-haspopup="listbox"]').filter(item=>isCombo(item)&&(identity.id?item.id===identity.id:identity.name?item.name===identity.name:false)&&fieldText(item)===identity.caption);
+      if(candidates.length!==1)throw Error('The dropdown changed. Choose an option on the employer page.');
+      node=candidates[0];
+    };
     const before=node.value,country=countryField(node),street=streetField(node),editable=node.tagName==='INPUT'&&!node.readOnly;
     const query=country&&countryKey(answer)==='united states'?'United States':answer;
     check();node.focus();node.click();
     node.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',code:'ArrowDown',bubbles:true,composed:true}));
-    if(editable)writeValue(node,query);
+    if(editable){typed.add(node);writeValue(node,query);}
     const checkQuery=()=>{
       check();
+      reconnect();
+      if(editable&&!typed.has(node)){if(node.value&&node.value!==query)throw Error('The dropdown changed while it was being filled. Review its answer on the employer page.');typed.add(node);writeValue(node,query);}
       if(!node.isConnected||editable&&node.value!==query)throw Error('The dropdown changed while it was being filled. Review its answer on the employer page.');
     };
     let option;
     for(let attempt=0;attempt<25;attempt++){
       checkQuery();option=options(node).find(item=>{
         const caption=item.getAttribute('aria-label')||item.textContent;
-        if(!street)return matches(node,caption,answer);
+        if(!street)return item.getAttribute('data-value')===answer||item.getAttribute('value')===answer||matches(node,caption,answer);
         const address=item.querySelector('.pac-item-query')?.textContent||text(caption).split(',')[0];
         return canonical(address)===canonical(answer)||canonical(caption)===canonical(answer);
       });
@@ -113,7 +122,10 @@ export function createComboboxController(document,{visible,writeValue}) {
     const selectedLabel=text(option.getAttribute('aria-label')||option.textContent);
     option.dispatchEvent(new win.MouseEvent('mousedown',{bubbles:true,cancelable:true,composed:true}));option.click();
     await new Promise(resolve=>win.setTimeout(resolve,0));check();
-    proofs.set(node,{label:selectedLabel,inputValue:node.value});
+    reconnect();
+    // A typed search query is not a committed answer. Only retain a proof
+    // when selecting the option actually changed the widget's native value.
+    if(node.value&&node.value!==query&&node.getAttribute('aria-expanded')!=='true')proofs.set(node,{label:selectedLabel,inputValue:node.value});
     if(!value(node))throw Error('The employer dropdown did not accept this answer. Choose its option on the application page.');
   }
   return {isCombo,value,options,select,matches,root,menus};

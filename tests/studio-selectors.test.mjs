@@ -71,6 +71,17 @@ test('Studio selectors load assignments and flush edits before saving a new prom
   assert.equal(app.find('studio-prompt').props.disabled, false);
 });
 
+test('resume website toggles save visibility after flushing and keep profile links unchanged',async t=>{
+ const app=harness(t);app.props.candidate.document.personalDetails={onlinePresence:{linkedin:'https://linkedin.com/in/example',github:'https://github.com/example',website:'https://example.test'}};const original=structuredClone(app.props.candidate.document.personalDetails);
+ app.props.request=async(operation,payload)=>{app.requests.push({operation,payload});app.operations.push(operation);return operation==='PROMPT_SETTINGS'?{library}:{candidate:{revision:2,document:payload.document}};};await app.settle();
+ const toggles=nodes(app.render()).filter(node=>node.type==='input'&&node.props.type==='checkbox');assert.equal(toggles.length,3);assert.ok(toggles.every(node=>node.props.checked));toggles[0].props.onChange({target:{checked:false}});await app.settle();const saved=app.requests.find(item=>item.operation==='CANDIDATE_SAVE');assert.equal(saved.payload.document.applicationPreferences.resumeWebsiteVisibility.linkedin,false);assert.deepEqual(saved.payload.document.personalDetails,original);assert.ok(app.operations.indexOf('flush')<app.operations.indexOf('CANDIDATE_SAVE'));assert.equal(nodes(app.render()).filter(node=>node.type==='input')[0].props.checked,false);
+});
+
+test('Set as default flushes customization and saves the current template with its formatting',async t=>{
+ const app=harness(t),draft={candidateId:'one',documentTemplate:{id:'harvard',version:1},formattingOverrides:{headerAlignment:'right',accentColor:'#6550ce'}};
+ app.props.request=async(operation,payload)=>{app.requests.push({operation,payload});app.operations.push(operation);return operation==='PROMPT_SETTINGS'?{library}:operation==='STUDIO_BOOTSTRAP'?{record:{draft}}:{candidate:{revision:2,document:payload.document}};};await app.settle();app.find('studio-set-default').props.onClick();await app.settle();const saved=app.requests.find(item=>item.operation==='CANDIDATE_SAVE');assert.equal(saved.payload.document.applicationPreferences.preferredDocumentTemplateId,'harvard');assert.deepEqual(saved.payload.document.applicationPreferences.defaultDocumentStyle,{documentTemplate:draft.documentTemplate,formattingOverrides:draft.formattingOverrides});assert.ok(app.operations.indexOf('flush')<app.operations.indexOf('STUDIO_BOOTSTRAP'));assert.ok(nodes(app.render()).some(node=>node.props.role==='status'&&node.props.children.includes('Default document style saved.')));
+});
+
 test('Studio prompt save failures retain the previous selection and offer a reload', async t => {
   const app = harness(t);
   await app.settle();

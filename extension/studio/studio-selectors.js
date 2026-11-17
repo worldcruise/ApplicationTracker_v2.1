@@ -8,6 +8,7 @@ export function createStudioSelectors(React, storage = studioStorage) {
     const [loaded, setLoaded] = React.useState(null);
     const [error, setError] = React.useState('');
     const [saving, setSaving] = React.useState(false);
+    const [defaultMessage,setDefaultMessage]=React.useState('');
     const [reload, setReload] = React.useState(0);
     const current = React.useRef(null);
     current.current = { id, candidate, flush, onSaved, onBusyChange };
@@ -60,6 +61,34 @@ export function createStudioSelectors(React, storage = studioStorage) {
       }
     }
 
+    async function selectWebsite(key,checked){
+      if(disabled||pending.current||!candidate)return;
+      const before=current.current;pending.current=true;setSaving(true);setError('');before.onBusyChange(true);
+      try{
+        await before.flush();if(current.current.id!==before.id)return;
+        const document=structuredClone(before.candidate.document);
+        document.applicationPreferences={...document.applicationPreferences,resumeWebsiteVisibility:{...document.applicationPreferences?.resumeWebsiteVisibility,[key]:checked}};
+        const result=await request('CANDIDATE_SAVE',{candidateId:before.id,expectedRevision:before.candidate.revision,document,mutationId:crypto.randomUUID()});
+        if(current.current.id===before.id)before.onSaved(result);
+      }catch(reason){setError(reason.message||'Resume website settings could not be saved.');}
+      finally{pending.current=false;setSaving(false);before.onBusyChange(false);}
+    }
+
+    async function setStyleDefault(){
+      if(disabled||pending.current||!candidate)return;
+      const before=current.current;pending.current=true;setSaving(true);setError('');setDefaultMessage('');before.onBusyChange(true);
+      try{
+        await before.flush();if(current.current.id!==before.id)return;
+        const saved=await request('STUDIO_BOOTSTRAP',{candidateId:before.id}),draft=saved.record?.draft;
+        if(!draft||draft.candidateId!==before.id)throw Error('Reload Resume Studio before saving its default style.');
+        const document=structuredClone(before.candidate.document);
+        document.applicationPreferences={...document.applicationPreferences,preferredDocumentTemplateId:draft.documentTemplate.id,defaultDocumentStyle:{documentTemplate:structuredClone(draft.documentTemplate),formattingOverrides:structuredClone(draft.formattingOverrides)}};
+        const result=await request('CANDIDATE_SAVE',{candidateId:before.id,expectedRevision:before.candidate.revision,document,mutationId:crypto.randomUUID()});
+        if(current.current.id===before.id){before.onSaved(result);setDefaultMessage('Default document style saved.');}
+      }catch(reason){setError(reason.message||'The default style could not be saved.');}
+      finally{pending.current=false;setSaving(false);before.onBusyChange(false);}
+    }
+
     return h('div', { className: 'studio-selector-bar', 'aria-busy': saving },
       h('div', { className: 'studio-selector-row' },
         h('div', { className:'studio-active-profile' },h('span',null,'Profile'),h('strong',null,candidate?.document.candidate.name||'Create your profile in Settings')),
@@ -69,6 +98,10 @@ export function createStudioSelectors(React, storage = studioStorage) {
             onChange: event => { void selectPrompt(event.target.value); } },
           !library && h('option', { value: '' }, error ? 'Unavailable' : id ? 'Loading…' : 'Select candidate'),
           library?.templates.map(template => h('option', { key: template.id, value: template.id }, template.title))))),
+      candidate&&h('fieldset',{className:'studio-website-options',disabled:disabled||saving},
+        h('legend',null,'Websites on resume'),
+        ...[['linkedin','LinkedIn'],['github','GitHub'],['website','Other website']].map(([key,label])=>h('label',{key},h('input',{type:'checkbox',checked:candidate.document.applicationPreferences?.resumeWebsiteVisibility?.[key]!==false,onChange:event=>{void selectWebsite(key,event.target.checked);}}),label))),
+      candidate&&h('div',{className:'studio-default-style'},h('button',{id:'studio-set-default',type:'button',className:'button',disabled:disabled||saving,onClick:()=>{void setStyleDefault();}},'Set as default'),defaultMessage&&h('span',{role:'status'},defaultMessage)),
       error && h('div', { id: 'studio-selector-error', className: 'studio-selector-error', role: 'alert' },
         error, ' ', h('button', { type: 'button', disabled: saving, onClick: () => setReload(value => value + 1) }, 'Reload prompts')));
   };
