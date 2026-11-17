@@ -1,0 +1,74 @@
+/* Web workspace type scale and navigation. Native dock and PDF text retain
+   their own sizing; controls use the existing Autofill settings as a reference. */
+.workspace-topbar-start{display:flex;align-items:center;gap:16px;min-width:0;}
+.workspace-icon-button.workspace-sidebar-toggle{flex:none;width:36px;height:36px;padding:7px;border:1px solid var(--color-line);border-radius:10px;background:var(--color-surface);color:var(--color-muted);box-shadow:0 1px 2px #18233906;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s,transform .15s;}
+.workspace-sidebar-toggle svg{width:20px;height:20px;stroke-linecap:round;stroke-linejoin:round;}
+.workspace-icon-button.workspace-sidebar-toggle:hover{color:var(--color-accent);background:var(--color-accent-soft);border-color:color-mix(in srgb,var(--color-accent) 40%,var(--color-line));box-shadow:0 2px 6px #6550ce12;}
+.workspace-icon-button.workspace-sidebar-toggle[aria-expanded=false]{color:var(--color-accent);background:var(--color-accent-soft);border-color:color-mix(in srgb,var(--color-accent) 25%,var(--color-line));}
+.workspace-icon-button.workspace-sidebar-toggle:active{transform:scale(.95);box-shadow:none;}
+.workspace-icon-button.workspace-sidebar-toggle:focus-visible{outline:2px solid var(--color-accent);outline-offset:3px;}
+@media(prefers-reduced-motion:reduce){.workspace-icon-button.workspace-sidebar-toggle{transition:none;}.workspace-icon-button.workspace-sidebar-toggle:active{transform:none;}}
+.workspace-breadcrumb{min-width:0;flex-wrap:wrap;line-height:1.5;}
+.autofill-web-link{font-size:14px;line-height:1.5;min-height:42px;}
+.workspace-breadcrumb,.workspace-profile{font-size:14px;}
+.web-app-main{font-size:16px;line-height:1.6;}
+.web-app-main p{font-size:16px;line-height:1.65;}
+.web-app-main :is(.web-button,.workspace-tabs button,.meeting-filter select,.meetings-timezone,.meetings-clock){font-size:14px;line-height:1.5;}
+.web-app-main .web-button{min-height:36px;padding:8px 13px;}
+.web-app-main .web-card-heading h2{font-size:18px;line-height:1.4;}
+.web-app-main .web-eyebrow{font-size:12px;line-height:1.5;}
+.web-app-main :is(.meeting-progress-table,.jr-record-table){font-size:14px;}
+.web-app-main :is(.meeting-progress-table th,.jr-record-table th){font-size:13px;padding-block:12px;}
+.web-app-main :is(.meeting-progress-table td,.jr-record-table td){padding-block:12px;vertical-align:middle;}
+.web-app-main .applications-page :is(.application-record-main,.record-salary-cell,.record-document-button,.application-record-actions button){font-size:14px;line-height:1.5;}
+.web-app-main #job-records-design :is(.jr-button,.jr-field input,.jr-field textarea,.jr-field select,.jr-search-row input,.jr-search-row select,.jr-table-main){font-size:14px;line-height:1.5;}
+.web-app-main #job-records-design :is(.jr-field label,.jr-record-meta,.jr-salary){font-size:13px;line-height:1.5;}
+.web-app-main :is(.meeting-company,.application-record-company){font-size:16px;line-height:1.45;}
+.web-app-main :is(.meeting-role,.meeting-time,.meeting-tags,.meeting-status){font-size:13px;line-height:1.5;}
+.web-app-main .web-settings-sidebar a{font-size:14px;min-height:44px;line-height:1.5;}
+.web-app-main .settings-pane-heading p{font-size:15px;max-width:70ch;}
+.web-app-main :is(.prompt-settings,.default-export-root){font-size:15px;line-height:1.6;}
+.web-app-main :is(.prompt-settings label,.prompt-settings input,.prompt-settings textarea,.prompt-settings select,.rp-note){font-size:14px;line-height:1.6;}
+.web-app-main .af-profile-page{font-size:15px;line-height:1.6;}
+.web-app-main .af-profile-page :is(.af-field input,.af-field select,.af-field textarea,.af-nav button,.af-primary,.af-link){font-size:14px;line-height:1.5;}
+.web-app-main .af-profile-page :is(.af-field>span,.af-header p,.af-help,.af-message,.af-resume-file span,.af-review-item span,.af-review-banner){font-size:13px;line-height:1.6;}
+.web-app-main .af-profile-page :is(.af-grid,.af-record){gap:16px;}
+.web-app-main .af-profile-page .af-field :is(input,select){min-height:40px;}
+.web-app-main .af-profile-page .af-field{gap:6px;}
+.web-app-main .af-profile-page .af-content{padding:24px;}
+.web-app-main :is(label,input,select,textarea){font-size:16px;}
+.web-app-main .af-profile-page :is(.af-field input,.af-field select,.af-field textarea,.af-field>span){font-size:16px;}
+.web-app-main .af-profile-page{font-size:16px;}
+.web-app-main #job-records-design .jr-company h3{font-size:18px;line-height:1.4;}
+.web-app-main :is(.meeting-tag,.record-status-tag){font-size:12px;line-height:1.5;}
+@media(min-width:1000px){
+  .autofill-web-link{font-size:14px;}
+  html[data-web-sidebar-collapsed=true] :is(.web-app-scroll,.preview-web-page){grid-template-columns:76px minmax(0,1fr);}
+  html[data-web-sidebar-collapsed=true] .autofill-web-header{width:76px;}
+  html[data-web-sidebar-collapsed=true] .autofill-web-header-inner{padding:22px 10px 16px;gap:28px;align-items:center;}
+  html[data-web-sidebar-collapsed=true] .workspace-topbar{left:76px;}
+  html[data-web-sidebar-collapsed=true] .autofill-web-brand{padding:0;justify-content:center;}
+  html[data-web-sidebar-collapsed=true] .application-tracker-wordmark,html[data-web-sidebar-collapsed=true] .autofill-web-link>span,html[data-web-sidebar-collapsed=true] .workspace-profile>span:last-child{display:none;}
+  html[data-web-sidebar-collapsed=true] .autofill-web-nav{align-items:center;}
+  html[data-web-sidebar-collapsed=true] .autofill-web-link{width:44px;min-height:44px;padding:12px;justify-content:center;}
+  html[data-web-sidebar-collapsed=true] .autofill-web-link svg{width:20px;height:20px;}
+  html[data-web-sidebar-collapsed=true] .web-header-actions{flex-direction:column;justify-content:center;gap:14px;width:100%;}
+  html[data-web-sidebar-collapsed=true] .workspace-profile{padding:0;}
+}
+@media(max-width:999px){html[data-web-sidebar-collapsed=true] .autofill-web-nav{display:none;}.workspace-topbar-start{gap:10px;}}
+@media(max-width:600px){.workspace-breadcrumb{font-size:12px;}.web-app-main{font-size:15px;}.web-app-main .af-profile-page .af-content{padding:16px;}}
+.web-app-main .applications-page[data-record-layout=list] table{width:100%;border-collapse:collapse;}
+.web-app-main .applications-page[data-record-layout=list] :is(th,td){padding:12px 14px;vertical-align:middle;text-align:left;}
+.web-app-main .applications-page[data-record-layout=list] th{font-size:13px;font-weight:600;line-height:1.4;}
+.web-app-main .applications-page[data-record-layout=list] .application-record-main{display:inline-flex;align-items:center;gap:10px;min-height:34px;padding:0;line-height:1.4;}
+.web-app-main .applications-page[data-record-layout=list] .application-record-main>span:last-child{max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.web-app-main .applications-page[data-record-layout=list] :is(.record-document-button,.application-record-actions .web-button){display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:6px 10px;line-height:1.4;white-space:nowrap;}
+.web-app-main .applications-page[data-record-layout=list] .application-action-icon svg{display:block;width:15px;height:15px;}
+.web-app-main .applications-page[data-record-layout=list] .record-document-cell{width:1%;white-space:nowrap;}
+.web-app-main .applications-page[data-record-layout=list] .record-document-missing{display:inline-flex;align-items:center;justify-content:center;min-width:48px;min-height:34px;}
+.web-app-main .applications-page[data-record-layout=list] .record-updated-cell{font-size:13px!important;white-space:nowrap;}
+.web-app-main .applications-page[data-record-layout=list] .record-actions-cell{min-width:0;width:1%;white-space:nowrap;}
+.web-app-main .applications-page[data-record-layout=list] .application-record-actions{display:flex;align-items:center;flex-wrap:nowrap;gap:8px;margin:0;}
+.web-app-main #job-records-design[data-layout=list] .jr-record-table :is(th,td){padding:12px 14px;vertical-align:middle;}
+.web-app-main #job-records-design[data-layout=list] .jr-record-table .jr-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;line-height:1.4;}
+.prompt-settings .manual-copy-settings fieldset{display:grid;gap:8px}.prompt-settings .manual-copy-settings label{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500}.prompt-settings .manual-copy-settings input[type=checkbox]{width:16px;height:16px;flex:none;margin:0;accent-color:#6550ce}.prompt-settings .manual-copy-settings fieldset>p{margin:0 0 10px 26px;font-size:13px;line-height:1.6;color:var(--muted)}.prompt-settings .manual-copy-settings button{justify-self:start;width:auto}

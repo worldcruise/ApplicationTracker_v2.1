@@ -1,0 +1,19 @@
+.native-pdf-view { position:relative; display:flex; flex-direction:column; width:100%; min-width:0; min-height:0; overflow:hidden; background:#282828; }
+.native-pdf-frame { display:block; flex:1; width:100%; height:100%; min-height:0; border:0; background:#282828; }
+.native-pdf-pending { position:absolute; inset:0; opacity:0; pointer-events:none; }
+.jr-document-dialog.jr-pdf-dialog,
+#job-records-design .jr-document-dialog.jr-pdf-dialog { margin:auto; inset:0; width:min(1000px,calc(100vw - 24px)); height:min(900px,90dvh); max-height:90dvh; padding:16px; overflow:hidden; }
+.jr-pdf-dialog[open] { display:flex; flex-direction:column; gap:10px; }
+.jr-pdf-dialog .jr-document-heading,.jr-pdf-dialog .jr-document-note { flex:none; margin:0; }
+.jr-pdf-dialog .jr-document-heading h3 { overflow-wrap:anywhere; }
+.jr-pdf-dialog .document-studio-action { width:auto; height:auto; min-height:36px; padding:8px 12px; font:inherit; font-size:13px; font-weight:500; white-space:nowrap; }
+.jr-document-pdf { flex:1; min-height:0; border:1px solid var(--color-line,#ddd); border-radius:8px; overflow:hidden; }
+.jr-pdf-dialog > .jr-button { align-self:flex-end; flex:none; }
+.jr-pdf-dialog :is(.jr-error,[role=status]) { margin:0; font-size:14px; }
+.preview-web-page .submitted-studio-view { display:flex; flex-direction:column; gap:16px; }
+.submitted-studio-view .submitted-studio-heading { flex:none; margin-bottom:0; }
+.submitted-studio-view .record-view-switcher { flex:none; }
+.submitted-studio-pdf { flex:1; min-height:420px; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--color-line,#ddd); border-radius:10px; }
+.submitted-studio-pdf > .document-pane { flex:1; }
+@media(max-width:999px) { .preview-web-page .submitted-studio-view { height:calc(100dvh - 70px); min-height:600px; } }
+@media(max-width:600px) { .jr-document-dialog.jr-pdf-dialog,#job-records-design .jr-document-dialog.jr-pdf-dialog { padding:10px; width:calc(100vw - 12px); height:94dvh; max-height:94dvh; } }

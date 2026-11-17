@@ -1,0 +1,8 @@
+Tool: built-in image_gen (edit, transparent_background=true)
+Input: extension/icons/icon.png
+Output: extension/icons/icon.png and icon-{16,24,32,48,128}.png
+
+Prompt:
+Edit target: the provided Application Tracker logo PNG. Remove ONLY the white exterior background outside the rounded purple square, making that exterior truly transparent with a smooth antialiased edge. Preserve the entire purple rounded square and its exact color, the white A letter, and mint green crossbar, their positions, proportions and details. Do not remove any white inside the logo. No redesign, no new features, no shadow, no text. Output transparent PNG for use as the browser extension app icon. Save the edited PNG into D:/dev/ApplicationTracker_v2.1/.tmp/application-tracker-transparent.png if a local save location can be selected.
+
+The generated asset was inspected and resized proportionally to the packaged icon sizes. Baseline/icon.png was preserved.

@@ -28,8 +28,11 @@ export async function buildReferenceDashboard() {
     }).replace('>Application Tracker</span>', '>Application Tracker 2.1</span>')
     .replaceAll('Schedule Meeting', 'Meetings');
   markup=markup.replace(/<div class="rd-brand">([\s\S]*?)<\/div>/,'<button type="button" class="rd-brand" data-action="Web Dashboard" aria-label="Open Dashboard" title="Open Dashboard">$1</button>');
-  const appLogo=(await readFile(path.join(root,'extension/icons/application-tracker.svg'),'utf8')).trim().replace('<svg ','<svg aria-hidden="true" focusable="false" style="width:100%;height:100%" ');
+  const appLogo='<img alt="" width="32" height="32">';
   markup=markup.replace(/(<span class="rd-logo">)[\s\S]*?(<\/span>)/,`$1${appLogo}$2`);
+  markup=markup.replace(/(<div class="rd-stats">)\s*(<div class="rd-stat rd-stat-resume">[\s\S]*?<\/div>)\s*(<div class="rd-stat rd-stat-applications">[\s\S]*?<\/div>)/,'$1$3$2')
+    .replace(/(<div class="rd-stat rd-stat-resume">)[\s\S]*?(<strong>)/,(_,opening,strong)=>opening+svg(icons.FileText,'file-text')+strong)
+    .replace('Resume Prepared Today','Pending');
   // Reference records are design samples; the controller fills these from saved data.
   const activity=markup.match(/<button[^>]*class="rd-activity application[^>]*>([\s\S]*?)<\/button>/)?.[1]
     ?.replace(/(<span class="rd-(?:activity-title|activity-company|time)">)[^<]*(<\/span>)/g,'$1$2');
@@ -60,7 +63,6 @@ export async function buildReferenceDashboard() {
   const sharedStyles=`#at-reference-dock { ${Object.entries(sharedTokens).map(([name,value])=>`--rd-${name}:${value};`).join(' ')} }\nhtml[data-theme="light"] #at-reference-dock { ${Object.entries(sharedTokens).map(([name,value])=>`--rd-${name}:${palette[value]||value};`).join(' ')} }`;
   const extra = `\n:root { --reference-dashboard-bg: #f7f7fa; }\n:root[data-theme="dark"] { --reference-dashboard-bg: #121213; }\nbody.reference-dashboard { margin: 0; background: var(--reference-dashboard-bg); }\n#at-reference-dock .rd-empty { margin: 0; padding: 18px 11px; font-size: 12px; color: var(--rd-muted); text-align: center; }\nhtml[data-theme] #at-reference-dock .rd-header { height:auto; min-height:53px; flex-wrap:wrap; }\nhtml[data-theme] #at-reference-dock .rd-person { max-width:100%; }\nhtml[data-theme] #at-reference-dock .rd-select { width:auto; max-width:250px; }\n#at-reference-dock button.rd-brand { padding:0; border:0; background:transparent; color:inherit; text-align:left; font:inherit; border-radius:7px; }\n#at-reference-dock button.rd-brand:focus-visible { outline:2px solid var(--rd-purple); outline-offset:4px; }\n#at-reference-dock button { cursor: pointer; }\n#at-reference-dock button:disabled { cursor: wait; opacity: .6; }\n`;
   await writeChanged(path.join(root, 'extension/dashboard.css'), `/* Original reference styles; local light palette follows. */\n${styles[1]}\n${light}\n${sharedStyles}\n${extra}`);
-  await writeChanged(path.join(root, 'extension/dashboard.html'), '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Application Tracker 2.1 — Dashboard</title><link rel="icon" href="icons/icon-32.png"><link rel="stylesheet" href="studio/theme.css"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="job-records.css"><link rel="stylesheet" href="apply-dock.css"><script type="module" src="studio/theme-bootstrap.js"></script></head><body class="reference-dashboard"><div id="reference-dashboard-root"></div><script type="module" src="dashboard.js"></script></body></html>\n');
   await writeChanged(path.join(root, 'extension/studio/LUCIDE-LICENSE.txt'), await readFile(path.join(root, 'node_modules/lucide/LICENSE'), 'utf8'));
 }
 if (isMain(import.meta.url)) await buildReferenceDashboard();

@@ -19,5 +19,9 @@ export async function buildPrompts() {
   const previous = await readFile(target, 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; });
   if (previous !== code) await writeFile(target, code);
   await build({absWorkingDir:projectRoot,entryPoints:[path.join(root,'prompt-templates.ts')],outfile:path.join(projectRoot,'extension/studio/prompt-repository.js'),bundle:true,format:'esm',platform:'browser',target:'chrome116'});
+  const builderTarget=path.join(projectRoot,'extension/studio/resume-prompt-builder.js');
+  const builder=await build({absWorkingDir:projectRoot,entryPoints:[path.join(root,'prompt-builder.ts')],outfile:builderTarget,bundle:true,write:false,format:'esm',platform:'browser',target:'chrome116'});
+  const builderCode=builder.outputFiles[0].text;
+  if(await readFile(builderTarget,'utf8').catch(error=>{if(error.code==='ENOENT')return '';throw error;})!==builderCode)await writeFile(builderTarget,builderCode);
 }
 if (isMain(import.meta.url)) buildPrompts().catch(error => { console.error(error.message); process.exitCode = 1; });

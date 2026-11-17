@@ -1,4 +1,5 @@
 import { profileValues } from './profile-values.js';
+import {educationQualification} from './education-fields.js';
 
 const object = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 const text = value => typeof value === 'string' ? value : '';
@@ -18,7 +19,7 @@ export function emptyProfile() {
 
 export function normalizeProfile(value) {
   if (!value || !value.nameData || !value.contactData || !Array.isArray(value.jobData) || !Array.isArray(value.educationData)) {
-    throw new Error('Choose a SpeedyApply profile JSON file.');
+    throw new Error('Choose a Application Tracker profile JSON file.');
   }
   const defaults = emptyProfile(), result = {};
   for (const key of Object.keys(defaults)) {
@@ -26,17 +27,17 @@ export function normalizeProfile(value) {
     result[key] = Array.isArray(defaults[key]) ? structuredClone(input ?? defaults[key])
       : typeof defaults[key] === 'object' ? { ...defaults[key], ...structuredClone(object(input)) } : input ?? defaults[key];
   }
-  for (const key of ['jobData', 'educationData', 'languageData', 'skillsData']) if (!Array.isArray(result[key])) throw new Error(`Invalid SpeedyApply ${key}.`);
+  for (const key of ['jobData', 'educationData', 'languageData', 'skillsData']) if (!Array.isArray(result[key])) throw new Error(`Invalid Application Tracker ${key}.`);
   if (typeof result.profileName !== 'string' || !result.profileName.trim()) throw new Error('Enter a profile name.');
   for (const [key, sample] of Object.entries(defaults)) {
     if (!sample || typeof sample !== 'object' || Array.isArray(sample)) continue;
     for (const [field, expected] of Object.entries(sample)) {
-      if (Array.isArray(expected) ? !Array.isArray(result[key][field]) : typeof result[key][field] !== typeof expected) throw new Error(`Invalid SpeedyApply ${key}.${field}.`);
+      if (Array.isArray(expected) ? !Array.isArray(result[key][field]) : typeof result[key][field] !== typeof expected) throw new Error(`Invalid Application Tracker ${key}.${field}.`);
     }
   }
-  if (result.addressData.country && !profileValues.countries.includes(result.addressData.country)) throw new Error('Use a country from the SpeedyApply profile editor.');
-  if (result.skillsData.length > 25 || result.skillsData.some(skill => typeof skill !== 'string')) throw new Error('SpeedyApply profiles support up to 25 text skills.');
-  if (!['', ...profileValues.genders].includes(result.employmentData.gender) || !['', ...profileValues.ethnicities].includes(result.employmentData.ethnicity)) throw new Error('Use employment answers from the SpeedyApply profile editor.');
+  if (result.addressData.country && !profileValues.countries.includes(result.addressData.country)) throw new Error('Use a country from the Application Tracker profile editor.');
+  if (result.skillsData.length > 25 || result.skillsData.some(skill => typeof skill !== 'string')) throw new Error('Application Tracker profiles support up to 25 text skills.');
+  if (!['', ...profileValues.genders].includes(result.employmentData.gender) || !['', ...profileValues.ethnicities].includes(result.employmentData.ethnicity)) throw new Error('Use employment answers from the Application Tracker profile editor.');
   for (const key of ['eligibilityUS', 'sponsorship', 'disability', 'veteran', 'hispanicOrLatino']) {
     const answer = result.employmentData[key];
     if (answer !== undefined && typeof answer !== 'boolean' && answer !== 'undisclosed') throw new Error(`Invalid employment answer: ${key}.`);
@@ -44,7 +45,7 @@ export function normalizeProfile(value) {
   const age = result.employmentData.age;
   if (age !== undefined && age !== 'undisclosed' && (typeof age !== 'number' || !Number.isFinite(age))) throw new Error('Invalid age answer.');
   for (const language of result.languageData) {
-    if (!['', ...profileValues.languages].includes(language?.language) || !['', ...profileValues.proficiencies].includes(language?.proficiency) || typeof language.fluent !== 'boolean') throw new Error('Use language answers from the SpeedyApply profile editor.');
+    if (!['', ...profileValues.languages].includes(language?.language) || !['', ...profileValues.proficiencies].includes(language?.proficiency) || typeof language.fluent !== 'boolean') throw new Error('Use language answers from the Application Tracker profile editor.');
   }
   for (const key of ['prefix', 'middleName', 'suffix', 'preferredFirstName', 'preferredMiddleName', 'preferredLastName']) {
     if (result.nameData[key] !== undefined && typeof result.nameData[key] !== 'string') throw new Error(`Invalid name field: ${key}.`);
@@ -57,7 +58,7 @@ export function normalizeProfile(value) {
   }
   for (const education of result.educationData) {
     for (const key of ['school', 'degree', 'fieldOfStudy']) if (typeof education?.[key] !== 'string') throw new Error(`Invalid education ${key}.`);
-    if (typeof education.currentlyAttending !== 'boolean' || education.degree && !profileValues.degrees.includes(education.degree)) throw new Error('Use a degree from the SpeedyApply profile editor.');
+    if (typeof education.currentlyAttending !== 'boolean' || education.degree && !profileValues.degrees.includes(education.degree)) throw new Error('Use a degree from the Application Tracker profile editor.');
     for (const key of ['startDate', 'endDate', 'gpa']) if (education[key] !== undefined && typeof education[key] !== 'string') throw new Error(`Invalid education ${key}.`);
   }
   return result;
@@ -72,6 +73,7 @@ export function profileName(profile) {
 
 function month(value) {
   const raw = text(value);
+  if (/^\d{4}$/.test(raw)) return raw;
   if (/^\d{4}-(0[1-9]|1[0-2])/.test(raw)) return raw.slice(0, 7);
   const match = raw.match(/^(0?[1-9]|1[0-2])\/(\d{4})$/);
   return match ? `${match[2]}-${match[1].padStart(2, '0')}` : '';
@@ -84,14 +86,14 @@ function rows(values, identify, annotations, convert) {
     const annotation = annotations.find(item => item.key === key && item.occurrence === occurrence);
     let hash = 2166136261;
     for (const character of `${key}:${occurrence}`) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
-    return { ...object(annotation?.fields), id: annotation?.id || `profile-row-${(hash >>> 0).toString(16)}`, ...convert(value, index) };
+    return { ...object(annotation?.fields), id: text(value.id) || annotation?.id || `profile-row-${(hash >>> 0).toString(16)}`, ...convert(value, index) };
   });
 }
 const jobKey = job => `${job.company}\0${job.jobTitle}`;
 const educationKey = education => `${education.school}\0${education.degree}\0${education.fieldOfStudy}`;
 
 // This document is a transient view for Studio's existing renderer, never the
-// canonical stored profile. Autofill fields remain in SpeedyApply's structure.
+// canonical stored profile. Autofill fields remain in Application Tracker's structure.
 export function profileToStudio(profile, id, extras = {}) {
   const contact = profile.contactData, address = profile.addressData, websites = profile.websiteData;
   const phone = [contact.phoneCountryCode, contact.phoneNumber].filter(Boolean).join(' ');
@@ -107,7 +109,7 @@ export function profileToStudio(profile, id, extras = {}) {
     })),
     professionalProfile: { ...object(extras.professionalProfile), skills: profile.skillsData,
       education: rows(profile.educationData, educationKey, extras.education || [], education => ({ school: education.school,
-        degree: [education.degree, education.fieldOfStudy].filter(Boolean).join(' in '), startDate: month(education.startDate), endDate: education.currentlyAttending ? '' : month(education.endDate) })) },
+        degree: [education.degreeName || education.degree, education.fieldOfStudy].filter(Boolean).join(' in '), startDate: month(education.startDate), endDate: education.currentlyAttending ? '' : month(education.endDate) })) },
     applicationPreferences: structuredClone(extras.applicationPreferences || {}),
     customPromptInstructions: structuredClone(extras.customPromptInstructions || []),
   };
@@ -144,17 +146,18 @@ export function studioToProfile(document, previous = emptyProfile(), extras = {}
     if (online[source] !== before.personalDetails.onlinePresence[source]) profile.websiteData[target] = text(online[source]);
   }
   if (JSON.stringify(document.companies || []) !== JSON.stringify(before.companies)) profile.jobData = list(document.companies).map((job, index) => {
-    const existing = previous.jobData[index], unchanged = before.companies[index];
-    return { ...object(existing), jobTitle: text(job.title), company: text(job.name), location: text(job.location),
+    const match=job.id?before.companies.findIndex(row=>row.id===job.id):index,existing = previous.jobData[match], unchanged = before.companies[match];
+    return { ...object(existing), ...(job.id?{id:job.id}:{}), jobTitle: text(job.title), company: text(job.name), location: text(job.location),
       startDate: unchanged?.startDate === job.startDate ? existing?.startDate || '' : text(job.startDate),
       endDate: unchanged?.endDate === job.endDate ? existing?.endDate || '' : text(job.endDate), currentlyWorkHere: job.current === true,
       description: [text(job.shortDetail), ...list(job.highlights).map(text)].filter(Boolean).join('\n') };
   });
   profile.skillsData = list(professional.skills).map(text).slice(0, 25);
   if (JSON.stringify(professional.education || []) !== JSON.stringify(before.professionalProfile.education)) profile.educationData = list(professional.education).map((education, index) => {
-    const existing = previous.educationData[index], unchanged = before.professionalProfile.education[index];
-    return { ...object(existing), school: text(education.school), degree: unchanged?.degree === education.degree ? existing?.degree || '' : degree(text(education.degree)),
-      fieldOfStudy: unchanged?.degree === education.degree ? existing?.fieldOfStudy || '' : text(education.degree).split(/\s+in\s+/i).slice(1).join(' in ') || (!profileValues.degrees.includes(education.degree) ? text(education.degree) : ''), currentlyAttending: existing?.currentlyAttending || false,
+    const match=education.id?before.professionalProfile.education.findIndex(row=>row.id===education.id):index,existing = previous.educationData[match], unchanged = before.professionalProfile.education[match],qualification=educationQualification(text(education.degree));
+    return { ...object(existing), ...(education.id?{id:education.id}:{}), school: text(education.school), degree: unchanged?.degree === education.degree ? existing?.degree || '' : qualification.degree || degree(text(education.degree)),
+      ...(unchanged?.degree!==education.degree&&qualification.degreeName?{degreeName:qualification.degreeName}:{}),
+      fieldOfStudy: unchanged?.degree === education.degree ? existing?.fieldOfStudy || '' : qualification.fieldOfStudy, currentlyAttending: existing?.currentlyAttending || false,
       startDate: unchanged?.startDate === education.startDate ? existing?.startDate || '' : text(education.startDate),
       endDate: unchanged?.endDate === education.endDate ? existing?.endDate || '' : text(education.endDate) };
   });

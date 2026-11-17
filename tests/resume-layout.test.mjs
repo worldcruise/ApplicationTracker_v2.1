@@ -34,21 +34,8 @@ test('all five real template layouts place Technical Skills directly after Summa
   assert.deepEqual(resumeSectionOrder('glalie',{educationBeforeSkills:true}),['summary','experience','education','skills']);
 });
 
-test('certification month inputs display legacy dates without changing them and emit year-month values',async()=>{
-  const source=await readFile('extension/settings.js','utf8'),jsx=(type,props)=>({type,props:props||{}});
-  const context=vm.createContext({monthInputValue,re:{jsx,jsxs:jsx},N:{jsx,jsxs:jsx,Fragment:'Fragment'},He:value=>value&&typeof value==='object'?value:{},vb:path=>'$.'+path.join('.'),ya:()=>'',
-    Ol:{useState:()=>[3,()=>{}],useRef:value=>({current:value}),useEffect(){}},Ia:['Personal','Contact','Work','Education','Equal Employment'],Ft:value=>typeof value==='string'?value:'',Tb:()=>({firstName:'Test',lastName:'Candidate'}),D0:[],A0:[],zi:[],crypto});
-  const fieldStart=source.indexOf('function N0('),fieldEnd=source.indexOf('var Rs=',fieldStart);
-  const setupStart=source.indexOf('function R0('),setupEnd=source.indexOf('var R=ce(ct(),1);function Eb',setupStart);
-  assert.ok(fieldStart>=0&&fieldEnd>fieldStart&&setupEnd>setupStart);vm.runInContext(source.slice(fieldStart,fieldEnd)+source.slice(setupStart,setupEnd),context);
-  const document={candidate:{name:'Test Candidate'},personalDetails:{},companies:[],professionalProfile:{education:[],certifications:[{id:'cert',name:'Certification',issuedOn:'2024-06-15',expiresOn:'2027-06-30'}]}},changes=[];
-  const tree=context.R0({editor:{document,change:(path,value)=>changes.push({path,value}),error:null}});
-  const nodes=tree=>Array.isArray(tree)?tree.flatMap(nodes):tree&&typeof tree==='object'?[tree,...nodes(tree.props?.children)]:[];
-  const controls=nodes(tree).filter(node=>node.type==='input'&&/Issue date|Expiration date/.test(node.props['aria-label']||''));
-  assert.equal(controls.length,2);assert.deepEqual(controls.map(node=>node.props.type),['month','month']);assert.deepEqual(controls.map(node=>node.props.value),['2024-06','2027-06']);
-  assert.equal(document.professionalProfile.certifications[0].issuedOn,'2024-06-15');
-  controls[0].props.onChange({target:{value:'2025-02'}});assert.equal(changes[0].value,'2025-02');assert.equal(changes[0].path.at(-1),'issuedOn');
-  assert.ok(nodes(tree).some(node=>node.type==='input'&&node.props.type==='date'&&node.props['aria-label']==='Date of birth'));
+test('month values retain stored precision until an explicit edit',()=>{
+ const original={issuedOn:'2024-06-15',expiresOn:'2027-06-30'};assert.equal(monthInputValue(original.issuedOn),'2024-06');assert.equal(monthInputValue(original.expiresOn),'2027-06');assert.deepEqual(original,{issuedOn:'2024-06-15',expiresOn:'2027-06-30'});assert.equal(monthInputValue('2025-02'),'2025-02');assert.equal(monthInputValue('unknown'),'unknown');
 });
 
 test('a long bullet retains its hanging indent across page breaks',async()=>{

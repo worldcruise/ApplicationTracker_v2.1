@@ -12,17 +12,24 @@ export function createQueueResumeEditor({profiles,drafts,validateResume,makeSnap
     const candidate=await profiles.get(record.candidateId),active=await profiles.bootstrap();
     if(!candidate||active?.id!==candidate.id)fail('CANDIDATE_CONFLICT','Select this job’s candidate before updating its resume.');
     const candidateInfo={id:candidate.id,name:candidate.document.candidate.name,exportDirectory:candidate.document.applicationPreferences?.exportDirectory||''};
-    const cvJsonRaw=input.cvJsonRaw,coverLetterRaw=input.coverLetterRaw??'',coverLetterEnabled=input.coverLetterEnabled===true;
+    let cvJsonRaw=input.cvJsonRaw;const coverLetterRaw=input.coverLetterRaw??'',coverLetterEnabled=input.coverLetterEnabled===true;
     if(typeof cvJsonRaw!=='string'||bytes(cvJsonRaw)>1024*1024)fail('INVALID_CV','CV JSON must be at most 1 MiB.');
     if(typeof coverLetterRaw!=='string'||bytes(coverLetterRaw)>128*1024)fail('INVALID_LETTER','Cover letter must be at most 128 KiB.');
     const parsed=validateResume(cvJsonRaw);
     if(!parsed.value)return {candidate:candidateInfo,validation:{state:parsed.state||(!cvJsonRaw.trim()?'empty':'schema_error'),message:parsed.message||'Paste valid six-field CV JSON.',fieldPath:parsed.fieldPath||'$'}};
     const cv=parsed.value;if(typeof cv.company!=='string'||!cv.company.trim()||cv.company.trim().length>300||typeof cv.title!=='string'||!cv.title.trim()||cv.title.trim().length>500)fail('INVALID_CV','Enter a company (up to 300 characters) and job title (up to 500 characters) in the CV JSON.');
+    // An extracted resume has no target employer. Retain the selected queue job.
+    if(/^unknown$/i.test(cv.company.trim())&&record.company?.trim()){cv.company=record.company;cvJsonRaw=JSON.stringify(cv);}
     let letter=null;
     try{if(coverLetterEnabled)letter=parseCoverLetter(coverLetterRaw,candidate.id,`queue-resume:${record.id}`);}catch(error){return {candidate:candidateInfo,validation:{state:'letter_error',message:error.message,company:cv.company,title:cv.title,fieldPath:'coverLetterRaw'}};}
     const base=(await drafts.bootstrap(candidate.id)).record.draft;
+    const previousTemplate=record.resume?.documentTemplate||base.documentTemplate;
+    const documentTemplate=input.documentTemplate||previousTemplate;
+    const formattingOverrides=documentTemplate.id===previousTemplate.id
+      ?record.resume?.snapshot?.formattingOverrides||base.formattingOverrides||{}
+      :base.templateOverrides?.[documentTemplate.id]||{};
     const draft={...base,id:`queue-resume:${record.id}`,candidateId:candidate.id,jobInputRaw:`${record.url}\n${record.description}`,cvJsonRaw,coverLetterRaw,coverLetterEnabled,
-      documentTemplate:record.resume?.documentTemplate||base.documentTemplate,formattingOverrides:record.resume?.snapshot?.formattingOverrides||base.formattingOverrides||{},bindings:record.resume?.snapshot?.bindings||{experience:[],education:[]}};
+      documentTemplate,formattingOverrides,bindings:record.resume?.snapshot?.bindings||{experience:[],education:[]}};
     let snapshot;
     try{snapshot=makeSnapshot(candidate,draft,`queue-input:${record.id}`,1).snapshot;}catch(error){return {candidate:candidateInfo,validation:{state:'schema_error',message:error.message,fieldPath:error.fieldPath||'$'}};}
     return {candidate:candidateInfo,validation:{state:'valid',message:'CV ready to update or download.',company:cv.company,title:cv.title},prepared:{candidate,draft,snapshot,letter,

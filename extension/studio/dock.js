@@ -3,7 +3,7 @@ export function openStudioDock(windowId, browser = globalThis.chrome) {
 }
 
 export async function openDashboard(route = '/', browser = globalThis.chrome) {
-  if (!['/', '/profile', '/profile/new', '/settings', '/settings/profile', '/settings/profile/new', '/settings/prompts', '/settings/other', '/resume-studio', '/dashboard', '/meetings'].includes(route)) {
+  if (!['/?add=1','/?tab=queue', '/', '/profile', '/profile/new', '/settings', '/settings/profile', '/settings/profile/new', '/settings/prompts', '/settings/other', '/resume-studio', '/dashboard', '/dashboard?login=true', '/meetings'].includes(route)) {
     throw new Error(`Unknown ${APP_NAME} page.`);
   }
   const base = browser.runtime.getURL('options.html');
@@ -14,7 +14,7 @@ export async function openDashboard(route = '/', browser = globalThis.chrome) {
     if (current === preview) {
       const tab = await browser.tabs.getCurrent();
       if (!Number.isSafeInteger(tab?.id)) throw new Error('Reload Resume Studio before switching pages.');
-      await flushStudioTab(tab.id, browser);
+      if(!new URL(globalThis.location.href).searchParams.has('submitted'))await flushStudioTab(tab.id, browser);
       globalThis.location.assign(`${base}#${route}`);
     } else {
       globalThis.location.hash = route;

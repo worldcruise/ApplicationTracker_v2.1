@@ -1,0 +1,17 @@
+.application-card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr)); gap:16px; }
+.application-card { display:flex; flex-direction:column; align-items:flex-start; gap:12px; min-width:0; padding:18px; border:1px solid var(--color-line); border-radius:12px; background:var(--color-surface); box-shadow:0 2px 8px #00000008; }
+.application-card .application-record-main { display:flex; align-items:center; gap:12px; width:100%; padding:0; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+.application-card .application-record-main>span:last-child { display:grid; gap:4px; min-width:0; }
+.application-card .application-record-main strong { font-size:16px; }
+.application-card .application-record-main small,.application-card time { color:var(--color-muted); }
+.application-card .application-record-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:auto; }
+.application-table-scroll { width:100%; overflow-x:auto; }
+.applications-table { width:100%; border-collapse:collapse; }
+.applications-table th { text-align:left; }
+.application-manage { position:relative; margin-left:auto; }
+.application-manage summary { cursor:pointer; list-style:none; }
+.application-manage-menu { position:absolute; z-index:5; top:calc(100% + 6px); right:0; display:grid; min-width:160px; padding:5px; border:1px solid var(--color-line); border-radius:10px; background:var(--color-surface); box-shadow:0 10px 28px #00000024; }
+.application-manage-menu button { padding:9px 12px; border:0; border-radius:6px; background:transparent; color:var(--color-ink); text-align:left; cursor:pointer; }
+.application-manage-menu button:hover { background:var(--color-canvas); }
+
+.meetings-application-board [data-board-only=true] [data-group=active] .meeting-group-columns { grid-template-columns:repeat(3,minmax(0,1fr)); }

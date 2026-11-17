@@ -3,6 +3,6 @@ export const PROMPT_SETTINGS_OPERATIONS = new Set(['PROMPT_SETTINGS', 'PROMPT_SA
 export function isPromptSettingsSender(sender, browser = globalThis.chrome) {
   try {
     const url = new URL(sender.url), base = new URL(browser.runtime.getURL('options.html'));
-    return sender.id === browser.runtime.id && (sender.frameId ?? 0) === 0 && url.protocol === base.protocol && url.host === base.host && url.pathname === base.pathname && url.hash.split('?')[0] === '#/settings/prompts';
+    return sender.id === browser.runtime.id && (sender.frameId ?? 0) === 0 && url.protocol === base.protocol && url.host === base.host && url.pathname === base.pathname && ['#/settings/prompts','#/settings/ai/prompt','#/settings/ai/candidate'].includes(url.hash.split('?')[0]);
   } catch { return false; }
 }

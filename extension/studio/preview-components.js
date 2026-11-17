@@ -1,10 +1,9 @@
-import { wr as requireReact } from '../chunks/globals-BIOuRv6A.js';
+import {React} from '../vendor/react.js';
 import { openStudioPreview } from './dock.js';
 
-const React = requireReact();
 const h = React.createElement;
 
-export function StudioPreviewLink({ className, children }) {
+export function StudioPreviewLink({ className, children, ...props }) {
   const [windowId, setWindowId] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');

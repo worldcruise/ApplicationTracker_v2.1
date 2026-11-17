@@ -1,0 +1,17 @@
+html,body.native-panel,#native-panel-root { height:100%; min-height:0; margin:0; padding:0; overflow:hidden; }
+.native-panel #at-reference-dock { --dock-gutter:13px; height:100%; min-height:0; padding:0; }
+html[data-theme] .native-panel #at-reference-dock .rd-dock { display:flex; flex-direction:column; width:100%; max-width:none; height:100%; min-height:0; margin:0; border:0; border-radius:0; }
+.native-panel #at-reference-dock .rd-header { flex:none; flex-wrap:nowrap; gap:8px; }
+.native-panel #at-reference-dock .rd-person { margin-left:auto; }
+.native-panel #at-reference-dock .rd-main { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; }
+.native-panel #at-reference-dock :is(.rd-main,.rd-header) { padding-left:var(--dock-gutter); padding-right:var(--dock-gutter); }
+.native-panel #at-reference-dock .dock-view-host { display:flex; flex-direction:column; flex:1; min-height:0; overflow:auto; }
+.native-panel #at-reference-dock .dock-ai-apply { height:100%; flex:1; min-height:0; }
+.native-panel #at-reference-dock #dock-meetings { flex:1; min-height:0; height:100%; }
+.native-panel .native-header-icon { display:grid; place-items:center; width:28px; height:28px; flex:none; padding:0; border:0; border-radius:6px; background:transparent; color:var(--rd-muted); }
+.native-panel .native-header-icon svg { width:18px; height:18px; }
+.native-panel .native-header-icon:hover { color:var(--rd-purple); background:var(--rd-soft); }
+html[data-theme] .native-panel #at-reference-dock .rd-avatar { background:transparent; color:var(--rd-purple); border:0; padding:0; font-size:13px; font-weight:600; }
+.native-panel #at-reference-dock .rd-brand { flex:1; min-width:0; }
+.native-panel #at-reference-dock .rd-brand-name { overflow:hidden; text-overflow:ellipsis; }
+.native-panel [data-panel-error] { padding:12px; font-size:13px; color:var(--color-danger-ink); }

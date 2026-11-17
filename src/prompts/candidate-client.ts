@@ -9,7 +9,8 @@ export async function candidateRequest<T = CandidateResult>(operation: string = 
   if (!extensionAvailable()) throw new CandidateError("UNAVAILABLE", "Candidate storage is available in the installed extension.");
   const requestId = crypto.randomUUID();
   let response: CandidateReply<T>;
-  try { response = await chrome.runtime.sendMessage({ version: 1, requestId, operation, payload }); }
+  try { response = await chrome.runtime.sendMessage({ version: 1, requestId, operation, payload,
+    ...(['#/settings/prompts','#/settings/ai/prompt','#/settings/ai/candidate'].includes(globalThis.location?.hash.split('?')[0]) ? {settingsRoute:globalThis.location.hash.split('?')[0]} : {}) }); }
   catch { throw new CandidateError("CONNECTION_FAILED", "The coordinator could not be reached. Your input is retained. Try again."); }
   if (!response || response.version !== 1 || response.requestId !== requestId) throw new CandidateError("INVALID_REPLY", "The coordinator returned an invalid response. Your input is retained.");
   if (!response.ok) throw new CandidateError(response.error.code, response.error.message, response.error.fieldPath, response.error.currentRevision);

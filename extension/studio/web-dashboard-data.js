@@ -18,12 +18,17 @@ export function applicationMetrics(records, now = new Date()) {
   const count = start => records.filter(record => record.timestamp !== null && record.timestamp >= start.getTime() && record.timestamp <= now.getTime()).length;
   return { today: count(day), week: count(week), month: count(month), total: records.length };
 }
+export function applicationRangeRecords(records, days = 30, now = new Date()) {
+  if (![7, 30, 90].includes(days)) throw new Error('Choose a supported chart range.');
+  const first = new Date(now.getFullYear(), now.getMonth(), now.getDate()); first.setDate(first.getDate() - days + 1);
+  return records.filter(record => Number.isFinite(record.timestamp) && record.timestamp >= first.getTime() && record.timestamp <= now.getTime());
+}
 export function applicationSeries(records, days = 30, now = new Date()) {
   if (![7, 30, 90].includes(days)) throw new Error('Choose a supported chart range.');
   const key = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const first = new Date(now.getFullYear(), now.getMonth(), now.getDate()); first.setDate(first.getDate() - days + 1);
   const counts = new Map(); for (let index = 0; index < days; index++) { const date = new Date(first); date.setDate(date.getDate() + index); counts.set(key(date), 0); }
-  for (const record of records) { if (record.timestamp === null || record.timestamp > now.getTime()) continue; const date = key(new Date(record.timestamp)); if (counts.has(date)) counts.set(date, counts.get(date) + 1); }
+  for (const record of applicationRangeRecords(records,days,now)) { const date = key(new Date(record.timestamp)); if (counts.has(date)) counts.set(date, counts.get(date) + 1); }
   return [...counts].map(([date, count]) => ({ date, count }));
 }
 export function currentWebTab(tabs) {

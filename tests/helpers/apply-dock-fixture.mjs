@@ -30,5 +30,5 @@ export async function applyFixture(t) {
   let service=createDockApplyService(serviceDeps);
   const request=(operation,payload={})=>service.handle(operation,{windowId:41,...payload},sender);
   const action=(run,action,extra={})=>request('DOCK_APPLY_ACTION',{runId:run.id,action,...extra});
-  return {...base,profiles,openTabs,pages,sent,rendered,generated,employer,serviceDeps,request,action,recordsRequest:base.request,start:job=>request('DOCK_APPLY_START',{jobId:job.id,tabId:7}),settled:()=>service.settled(41),restart(){service=createDockApplyService(serviceDeps);},bumpProfile(){profiles.get(selected).revision++;}};
+  return {...base,profiles,openTabs,pages,sent,rendered,generated,employer,serviceDeps,request,action,pageEvent:(event,sender)=>service.handle('DOCK_APPLY_EVENT',{windowId:41,event},sender),recordsRequest:base.request,start:job=>request('DOCK_APPLY_START',{jobId:job.id,tabId:7}),settled:()=>service.settled(41),restart(){service=createDockApplyService(serviceDeps);},bumpProfile(){profiles.get(selected).revision++;}};
 }

@@ -120,7 +120,7 @@
 #job-records-design .jr-detail-navigation { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin:0; border:0; }
 #job-records-design .jr-detail-navigation .jr-detail-subnav { flex:1 1 auto; margin:0; padding:0; border:0; }
 #job-records-design .jr-detail-navigation.jr-editing { position:sticky; top:0; z-index:5; background:var(--jr-card); padding-top:8px; box-shadow:0 5px 8px -7px #0006; }
-#job-records-design #jr-edit-slot { margin-left:auto; padding-bottom:4px; }
+#job-records-design #jr-edit-slot { margin-left:auto; padding-bottom:4px; display:grid; gap:6px; justify-items:end; }
 #job-records-design #jr-edit-slot .jr-button { width:122px; min-height:36px; padding:7px 10px; font-size:11px; }
 #job-records-design .jr-document-fields { display:grid; gap:12px; }
 #job-records-design .jr-cover-letter-control { display:flex; align-items:center; gap:7px; font-size:12px; }
@@ -142,9 +142,15 @@
 #job-records-design .jr-source-link svg { width:13px; height:13px; flex-shrink:0; }
 #job-records-design .jr-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:0 13px 13px; }
 #job-records-design .jr-toolbar>.jr-icon { margin-left:auto; }
+#job-records-design[data-tab="applications"] .jr-body { padding:0 var(--dock-gutter,13px) 12px; }
+#job-records-design .jr-search-row { display:flex; align-items:center; gap:7px; padding:10px var(--dock-gutter,13px) 12px; }
+#job-records-design .jr-search-row input { box-sizing:border-box; flex:1; width:0; min-width:0; padding:9px 10px; border:1px solid var(--jr-line); border-radius:8px; background:var(--jr-card); color:var(--jr-text); font:inherit; font-size:12px; }
+#job-records-design .jr-search-row .jr-button { flex:none; min-height:35px; padding:8px 10px; white-space:nowrap; }
+#job-records-design .jr-search-row .jr-icon { flex:none; }
 #job-records-design .jr-add-form { display:grid; gap:12px; padding:var(--dock-gutter,13px); margin:0; background:var(--jr-card); border:0; border-radius:12px; }
 #job-records-design .jr-add-form input { display:block; width:100%; min-width:0; padding:8px 10px; border:1px solid var(--jr-line); border-radius:8px; background:var(--jr-bg); color:var(--jr-text); }
 #job-records-design .jr-select option { color:var(--jr-text); background:var(--jr-bg); }
+#job-records-design .jr-feedback { position:sticky; bottom:8px; z-index:8; box-shadow:0 3px 16px #0002; }
 #job-records-design .jr-feedback[data-error=true] { color:var(--color-danger-ink); background:var(--color-danger-fill); border-color:var(--color-danger-border); }
 #job-records-design .jr-unsaved { color:var(--jr-accent); font-size:11px; margin:6px 0; }
 #job-records-design .jr-candidate-note { padding:0 14px 12px; margin:0; color:var(--jr-muted); font-size:11px; }
@@ -155,24 +161,38 @@
 #job-records-design [aria-busy=true] { cursor:wait; }
 #job-records-design .jr-action-rail { flex-wrap:wrap; }
 #job-records-design .jr-sample { font-size:10px; color:var(--jr-muted); }
-#job-records-design .jr-queue-list { gap:8px; }
-#job-records-design .jr-queue-record { padding:10px var(--dock-gutter,13px); border-radius:10px; }
-#job-records-design .jr-queue-record .jr-record-head { grid-template-columns:minmax(0,1fr) auto; gap:8px; }
-#job-records-design .jr-queue-record .jr-company h3 { font-size:15px; line-height:1.3; margin:0 0 4px; }
-#job-records-design .jr-queue-record .jr-company p { font-size:13px; line-height:1.35; }
-#job-records-design .jr-queue-record .jr-company .jr-card-salary { margin-top:7px; font-size:12px; color:var(--jr-muted); }
+#job-records-design .jr-card-list { gap:8px; }
+#job-records-design .jr-document-dialog { box-sizing:border-box; width:min(520px,calc(100vw - 24px)); max-height:85dvh; overflow:auto; padding:18px; border:1px solid var(--jr-line); border-radius:12px; background:var(--jr-card); color:var(--jr-text); }
+#job-records-design .jr-document-dialog::backdrop { background:#0006; }
+#job-records-design .jr-document-dialog h3 { margin:0 0 14px; font-size:15px; }
+#job-records-design .jr-document-copy { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; line-height:1.6; margin-bottom:16px; }
+#job-records-design .jr-document-note { color:var(--jr-muted); font-size:12px; line-height:1.5; margin:0 0 12px; }
+#job-records-design .jr-resume-copy { white-space:normal; }
+#job-records-design .jr-resume-copy h2 { margin:0; font-size:22px; }
+#job-records-design .jr-resume-copy h4 { font-size:13px; margin:18px 0 6px; border-bottom:1px solid var(--jr-line); padding-bottom:5px; }
+#job-records-design .jr-resume-copy h5 { font-size:13px; margin:10px 0 3px; }
+#job-records-design .jr-resume-copy p { white-space:pre-wrap; margin:4px 0; }
+#job-records-design .jr-resume-copy ul { padding-left:18px; margin:6px 0; }
+#job-records-design .jr-document-contact { font-size:12px; color:var(--jr-muted); }
+#job-records-design .jr-submitted-documents h3 { font-size:13px; margin:0 0 6px; }
+#job-records-design .jr-submitted-actions { display:flex; gap:8px; }
+#job-records-design .jr-compact-record { padding:10px var(--dock-gutter,13px); border-radius:10px; }
+#job-records-design .jr-compact-record .jr-record-head { grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+#job-records-design .jr-compact-record .jr-company h3 { font-size:15px; line-height:1.3; margin:0 0 4px; }
+#job-records-design .jr-compact-record .jr-company p { font-size:13px; line-height:1.35; }
+#job-records-design .jr-compact-record .jr-company .jr-card-salary { margin-top:7px; font-size:12px; color:var(--jr-muted); }
 #job-records-design .jr-card-main { cursor:pointer; border-radius:6px; }
 #job-records-design .jr-card-main:focus-visible { outline:2px solid var(--jr-accent); outline-offset:4px; }
 #job-records-design .jr-card-main:hover .jr-company h3 { color:var(--jr-accent); }
-#job-records-design .jr-queue-record .jr-stamp { gap:4px; max-width:132px; }
+#job-records-design .jr-compact-record .jr-stamp { gap:4px; max-width:132px; }
 #job-records-design .jr-queue-status { display:flex; align-items:center; justify-content:flex-end; gap:5px; flex-wrap:wrap; }
-#job-records-design .jr-queue-record .jr-status { padding:3px 6px; }
-#job-records-design .jr-queue-record .jr-updated { font-size:10px; line-height:1.3; }
-#job-records-design .jr-queue-record .jr-record-actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-items:stretch; gap:6px; margin-top:12px; }
-#job-records-design .jr-queue-record .jr-record-actions .jr-button { display:flex; flex-direction:column; justify-content:center; min-width:0; min-height:42px; padding:4px 2px; font-size:10px; gap:3px; }
-#job-records-design .jr-queue-record .jr-record-actions .jr-icon { width:29px; height:29px; }
-#job-records-design .jr-queue-record .jr-record-actions .jr-button { white-space:nowrap; }
-#job-records-design .jr-queue-record .jr-record-actions svg { flex-shrink:0; width:13px; height:13px; }
+#job-records-design .jr-compact-record .jr-status { padding:3px 6px; }
+#job-records-design .jr-compact-record .jr-updated { font-size:10px; line-height:1.3; }
+#job-records-design .jr-compact-record .jr-record-actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-items:stretch; gap:6px; margin-top:12px; }
+#job-records-design .jr-compact-record .jr-record-actions .jr-button { display:flex; flex-direction:column; justify-content:center; min-width:0; min-height:42px; padding:4px 2px; font-size:10px; gap:3px; }
+#job-records-design .jr-compact-record .jr-record-actions .jr-icon { width:29px; height:29px; }
+#job-records-design .jr-compact-record .jr-record-actions .jr-button { white-space:nowrap; }
+#job-records-design .jr-compact-record .jr-record-actions svg { flex-shrink:0; width:13px; height:13px; }
 #job-records-design .jr-button.primary { background:var(--color-accent-solid); color:var(--color-on-accent); }
 #job-records-design :is(input,textarea)::placeholder { color:var(--jr-muted); opacity:1; }
 

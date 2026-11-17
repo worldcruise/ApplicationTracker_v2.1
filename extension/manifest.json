@@ -2,25 +2,67 @@
   "action": {
     "default_title": "Open Application Tracker 2.1 dock"
   },
-  "author": "kirk@speedyapply.com",
   "background": {
     "service_worker": "service-worker.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "all_frames": true,
-      "js": [
-        "content-scripts/content.js"
-      ],
       "matches": [
-        "*://*/*"
+        "https://*.myworkdayjobs.com/*",
+        "https://*.myworkdayjobs-impl.com/*",
+        "https://*.myworkdaysite.com/*",
+        "https://*.myworkday.com/*"
       ],
+      "js": [
+        "content-scripts/apply-network.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content-scripts/dock-apply.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://chat.deepseek.com/*"
+      ],
+      "js": [
+        "ai-apply/src/native-chat-search.js",
+        "ai-apply/src/sidebar-history.js",
+        "ai-apply/src/deepseek-routes.js",
+        "ai-apply/src/deepseek-consent.js",
+        "ai-apply/src/deepseek-frame.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "ai-apply/src/native-chat-search.js",
+        "ai-apply/src/build-info.js",
+        "ai-apply/src/workspace-shortcut-keys.js",
+        "ai-apply/src/sidebar-history.js",
+        "ai-apply/src/chat-history.js",
+        "ai-apply/src/chatgpt-frame.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
     }
   ],
   "description": "Track job applications, autofill forms, and prepare tailored resumes in one workspace.",
-  "homepage_url": "https://speedyapply.com",
   "host_permissions": [
     "*://*/*"
   ],
@@ -40,53 +82,40 @@
     "storage",
     "unlimitedStorage",
     "tabs",
-    "contextMenus",
-    "cookies",
     "sidePanel",
     "downloads",
     "activeTab",
     "scripting",
     "clipboardWrite",
-    "offscreen"
+    "offscreen",
+    "declarativeNetRequestWithHostAccess",
+    "downloads.open"
   ],
   "short_name": "Application Tracker 2.1",
   "side_panel": {
-    "default_path": "dashboard.html"
+    "default_path": "sidepanel.html"
   },
-  "version": "2.1.24",
+  "version": "2.1.27",
   "web_accessible_resources": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "resources": [
-        "images/icon-pattern.svg"
-      ]
-    },
-    {
-      "extension_ids": [
-        "mbgjopdedgonlbpikjfibkccpmhjbnag"
-      ],
-      "matches": [
-        "<all_urls>"
-      ],
-      "resources": [
-        "options.html"
-      ]
-    },
-    {
-      "matches": [
-        "*://*/*"
-      ],
-      "resources": [
-        "content-scripts/content.css"
-      ],
-      "use_dynamic_url": true
-    },
     {
       "resources": [
         "icons/icon-32.png",
+        "icons/icon.png",
         "icons/icon-128.png"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    },
+    {
+      "resources": [
+        "ai-apply/index.html",
+        "ai-apply/profile.html",
+        "preview.html",
+        "ai-apply/src/*",
+        "ai-apply/assets/*",
+        "ai-apply/vendor/*"
       ],
       "matches": [
         "http://*/*",
@@ -97,16 +126,23 @@
   "minimum_chrome_version": "116",
   "incognito": "not_allowed",
   "commands": {
-    "capture-job": {
+    "read-job-page": {
       "suggested_key": {
         "default": "Ctrl+Shift+F",
         "mac": "Command+Shift+F"
       },
-      "description": "Capture the current job page"
+      "description": "Read the current job page in Apply to Job"
+    },
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+G",
+        "mac": "Command+Shift+G"
+      },
+      "description": "Open Application Tracker dock"
     }
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; worker-src 'self';"
+    "extension_pages": "script-src 'self'; object-src 'none'; worker-src 'self'; base-uri 'none'; frame-src 'self' blob: https://chatgpt.com https://chat.deepseek.com;"
   },
-  "version_name": "2.1.24"
+  "version_name": "2.1.27"
 }

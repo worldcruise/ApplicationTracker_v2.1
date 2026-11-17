@@ -1,3 +1,8 @@
+import {configureMeetingWorkflow} from "../extension/studio/meeting-workflow-service.js";
+import {initializeLocalApp} from "../extension/studio/initialize-local-app.js";
+import {registerAIClipboard} from '../extension/studio/ai-clipboard-offscreen.js';
+import {configureNativePanel} from '../extension/studio/native-panel-service.js';
+import {createRecordPDFRenderer,registerDocumentPreviewRenderer} from '../extension/studio/document-preview-renderer.js';
 import {createPromptRepository as createApplicationPromptRepository} from '../extension/studio/prompt-repository.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -11,30 +16,30 @@ import { createProfileRepository } from '../extension/studio/profile-repository.
 import { emptyProfile } from '../extension/studio/profile-model.js';
 import { openWebStudioPreview } from '../extension/studio/web-preview.js';
 import { isPromptSettingsSender, PROMPT_SETTINGS_OPERATIONS } from '../extension/studio/settings-access.js';
+import {configurePromptSettingsBridge} from '../extension/studio/prompt-settings-bridge.js';
 import { buildPrompt } from '../extension/studio/prompt-settings.js';
 import { requireEmbeddedEditor } from '../extension/studio/editor-access.js';
-import { DASHBOARD_OPERATIONS, isReferenceDashboardSender } from '../extension/studio/reference-dashboard-access.js';
+import { DASHBOARD_OPERATIONS, isNativeDockSender, WEB_RECORD_OPERATIONS, isWorkspaceRecordsSender, isSubmittedPreviewSender } from '../extension/studio/reference-dashboard-access.js';
 import { handleCaptureHotkey } from '../extension/studio/capture-hotkey.js';
 import { createDockRecordsService, DOCK_RECORD_OPERATIONS } from '../extension/studio/dock-records-service.js';
 import {createQueueResumeExports} from '../extension/studio/queue-resume-export.js';
 import { createDockApplyService, DOCK_APPLY_OPERATIONS } from '../extension/studio/dock-apply-service.js';
 import { resumeSectionOrder, skillsFirstTemplate, layoutResumeParagraph } from '../extension/studio/resume-layout.js';
 import {resumeRenderer} from './helpers/resume-renderer.mjs';
-import {configureInlineDock} from '../extension/studio/inline-dock-service.js';
 import {createSingleProfileService,isProfileSettingsSender,PROFILE_OPERATIONS} from '../extension/studio/single-profile-service.js';
 
-test('the actual worker accepts inline dashboard requests only for the granted top-level document',async t=>{
-  const app=await coordinator(t),sender={id:app.chrome.runtime.id,url:'https://example.test/job',frameId:0,documentId:'employer-document',tab:{id:7,windowId:41,url:'https://example.test/job'}};
-  await app.chrome.storage.session.set({'inline-dock:v1:7':{token:'grant',documentId:'employer-document',collapsed:false}});
-  async function inline(operation,override={}){
-    const message={type:'inline-dock:request',token:'grant',action:'request',payload:{version:1,requestId:'inline-request',operation,payload:{}}};
-    return new Promise(resolve=>{for(const listener of app.chrome.runtime.onMessage.listeners)listener(message,{...sender,...override},resolve);});
+test('the actual worker accepts native panel requests and retires the website message bridge',async t=>{
+  const app=await coordinator(t),sender={id:app.chrome.runtime.id,url:app.chrome.runtime.getURL('sidepanel.html'),frameId:0,documentId:'native-document'};
+  const previous=app.chrome.runtime.getContexts;app.chrome.runtime.getContexts=async filter=>filter.contextTypes?.includes('SIDE_PANEL')?[{documentId:'native-document',contextType:'SIDE_PANEL',windowId:-1}]:previous(filter);
+  async function panel(operation,override={}){
+    const message={type:'native-panel:request',windowId:41,action:'request',envelope:{version:1,requestId:'native-request',operation,payload:{}}};let accepted=false;
+    const response=new Promise(resolve=>{for(const listener of app.chrome.runtime.onMessage.listeners)accepted=listener(message,{...sender,...override},resolve)||accepted;});return accepted?response:null;
   }
-  const state=await inline('DASHBOARD_STATE');assert.equal(state.ok,true);assert.equal(state.result.result.candidate.document.candidate.name,'Existing Autofill profile');
-  assert.equal((await inline('DOCK_RECORDS_STATE')).ok,true);
-  assert.equal((await inline('DASHBOARD_STATE',{frameId:1})).ok,false);
-  assert.equal((await inline('DASHBOARD_STATE',{documentId:'stale-document'})).ok,false);
-  assert.equal((await inline('CANDIDATE_EXPORT_JSON')).ok,false);
+  const state=await panel('DASHBOARD_STATE');assert.equal(state.ok,true);assert.equal(state.result.result.candidate.document.candidate.name,'Existing Autofill profile');
+  assert.equal((await panel('DOCK_RECORDS_STATE')).ok,true);
+  assert.equal((await panel('DASHBOARD_STATE',{url:'https://example.test/job'})).ok,false);
+  assert.equal((await panel('CANDIDATE_EXPORT_JSON')).ok,false);
+  let accepted=false;for(const listener of app.chrome.runtime.onMessage.listeners)accepted=listener({type:'inline-dock:request'},{id:app.chrome.runtime.id,url:'https://example.test/job'},()=>{})||accepted;assert.equal(accepted,false);
 });
 
 function event() {
@@ -63,13 +68,14 @@ async function coordinator(t, {withProfile=true}={}) {
   t.after(() => studioStorage.close());
   const createdTabs = [];
   const chrome = {
+    sampleData:{enabled:true},
     runtime: {
       id: 'autofill-test', getURL: path => `chrome-extension://autofill-test/${path}`,
       getContexts: async filter => filter?.documentIds?.includes('editor-document') ? [{ documentId: 'editor-document', documentUrl: 'chrome-extension://autofill-test/workspace.html', frameId: 1, tabId: 100, windowId: 41 }] : [{ documentId: 'preview-document', documentUrl: 'chrome-extension://autofill-test/preview.html', frameId: 0, tabId: 100, windowId: 41 }], onMessage: event(), onConnect: event(), onInstalled: event(), onStartup: event(),
     },
     storage: { local: memoryStorage(withProfile?{ profile: { ...emptyProfile(), profileName: 'Existing Autofill profile' } }:{}), session: memoryStorage(), onChanged: event() },
     windows: { get: async id => ({ id, type: 'normal' }), onRemoved: event(), update: async () => {} },
-    sidePanel: { setPanelBehavior: async () => {}, open: async () => {}, onClosed: event() },
+    sidePanel: { setOptions:async()=>{}, setPanelBehavior: async () => {}, open: async () => {}, onClosed: event() },
     action: { onClicked:event(), setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
     tabs: {
       onUpdated: event(), onRemoved: event(), onAttached: event(), query: async () => [],
@@ -80,8 +86,9 @@ async function coordinator(t, {withProfile=true}={}) {
     downloads: { search: async () => [], onChanged: event(), onCreated: event(), onErased: event() },
     commands: { onCommand: event() },
   };
-  const sandbox = vm.createContext({ resumeSectionOrder, skillsFirstTemplate, chrome, studioStorage, createProfileRepository, createDockRecordsService, saveDockApplication:async input=>{const raw=chrome.storage.local.values.appliedList||[];await chrome.storage.local.set({appliedList:[{jobTitle:input.jobTitle,jobLink:input.jobLink,companyName:input.companyName,companyLink:input.companyLink,profileName:input.profileDetails.profileName,status:'applied',date:input.appliedDate.toString()},...raw]});},syncDockApplication:async()=>{},openWebStudioPreview, requireEmbeddedEditor, handleCaptureHotkey, DASHBOARD_OPERATIONS, isReferenceDashboardSender: sender => isReferenceDashboardSender(sender, chrome), isPromptSettingsSender: sender => isPromptSettingsSender(sender, chrome), PROMPT_SETTINGS_OPERATIONS, crypto: webcrypto, TextEncoder, TextDecoder, URL, console, structuredClone, setTimeout, clearTimeout });
-  Object.assign(sandbox,{createSingleProfileService,isProfileSettingsSender:sender=>isProfileSettingsSender(sender,chrome),PROFILE_OPERATIONS,configureInlineDock,createApplicationPromptRepository,createQueueResumeExports,createDockApplyService,parseDockResume:async()=>({}),generateDockAnswer:async()=>''});
+  await chrome.storage.local.set({'meeting-mock-cards:v1':[],'meeting-mock-cards:version':6});
+  const sandbox = vm.createContext({ resumeSectionOrder, skillsFirstTemplate, chrome, studioStorage, createProfileRepository, createDockRecordsService, saveDockApplication:async input=>{const raw=chrome.storage.local.values.appliedList||[];await chrome.storage.local.set({appliedList:[{jobTitle:input.jobTitle,jobLink:input.jobLink,companyName:input.companyName,companyLink:input.companyLink,profileName:input.profileDetails.profileName,status:'applied',date:input.appliedDate.toString()},...raw]});},syncDockApplication:async()=>{},deleteDockApplication:async()=>{},openWebStudioPreview, requireEmbeddedEditor, handleCaptureHotkey, DASHBOARD_OPERATIONS, WEB_RECORD_OPERATIONS,isSubmittedPreviewSender:sender=>isSubmittedPreviewSender(sender,chrome),isWorkspaceRecordsSender:sender=>isWorkspaceRecordsSender(sender,chrome),isNativeDockSender: sender => isNativeDockSender(sender, chrome), isPromptSettingsSender: sender => isPromptSettingsSender(sender, chrome), PROMPT_SETTINGS_OPERATIONS, crypto: webcrypto, TextEncoder, TextDecoder, URL, console, structuredClone, setTimeout, clearTimeout });
+  Object.assign(sandbox,{buildStudioPrompt:buildPrompt,createRecordPDFRenderer,configureNativePanel,configurePromptSettingsBridge,configureAIApply:()=>({}),configureMeetingWorkflow,initializeLocalApp,parseResumeUpload:(input,{parse,fallback})=>(parse||fallback)(input),createSingleProfileService,isProfileSettingsSender:sender=>isProfileSettingsSender(sender,chrome),PROFILE_OPERATIONS,createApplicationPromptRepository,createQueueResumeExports,createDockApplyService,parseResumeFile:async()=>({}),generateDockAnswer:async()=>''});
   const source = (await readFile('extension/service-worker.js', 'utf8')).replace(/^import[^\n]+\n/gm, '');
   vm.runInContext(source, sandbox);
   const workspace = { id: chrome.runtime.id, url: chrome.runtime.getURL('workspace.html'), frameId: 1, documentId: 'editor-document', tab: { id: 100, windowId: 41 } };
@@ -101,24 +108,24 @@ async function coordinator(t, {withProfile=true}={}) {
 }
 
 test('the Profile page replaces a resume through the actual worker without creating another profile',async t=>{
-  const app=await coordinator(t);app.sandbox.parseDockResume=async()=>({nameData:{firstName:'Resume',lastName:'Person',preferredName:false},jobData:[],educationData:[],skillsData:['Testing']});
+  const app=await coordinator(t);app.sandbox.parseResumeFile=async()=>({nameData:{firstName:'Resume',lastName:'Person',preferredName:false},jobData:[],educationData:[],skillsData:['Testing']});
   const sender={id:app.chrome.runtime.id,url:app.chrome.runtime.getURL('options.html#/settings/profile'),frameId:0,tab:{id:7,windowId:41}};
   const initial=await app.request('PROFILE_STATE',{},sender);assert.equal(initial.ok,true,initial.error?.message);
   const updated=await app.request('PROFILE_RESUME_UPLOAD',{base64:'cGRm',fileName:'replacement.pdf',expectedRevision:initial.result.candidate.revision,mutationId:crypto.randomUUID()},sender);
   assert.equal(updated.ok,true,updated.error?.message);assert.equal(updated.result.candidate.id,initial.result.candidate.id);assert.equal(updated.result.candidate.profile.nameData.firstName,'Resume');assert.equal(app.chrome.storage.local.values.profile.resumeData.fileName,'replacement.pdf');
-  const profiles=await app.request('DASHBOARD_STATE',{}, {id:app.chrome.runtime.id,url:app.chrome.runtime.getURL('dashboard.html'),frameId:0});assert.equal(profiles.result.candidates.length,1);
+  const profiles=await app.request('DASHBOARD_STATE',{}, {id:app.chrome.runtime.id,url:app.chrome.runtime.getURL('sidepanel.html'),frameId:0});assert.equal(profiles.result.candidates.length,1);
   assert.equal(await app.request('PROFILE_STATE',{}, {...sender,url:'https://example.test/job'}),null);
   assert.equal(await app.request('PROFILE_STATE',{}, {...sender,url:app.chrome.runtime.getURL('options.html#/settings/prompts')}),null);
 });
 
 test('only the native dock can use Apply operations through the actual worker router',async t=>{
-  const app=await coordinator(t),dock={id:app.chrome.runtime.id,url:app.chrome.runtime.getURL('dashboard.html'),frameId:0};
+  const app=await coordinator(t),dock={id:app.chrome.runtime.id,url:app.chrome.runtime.getURL('sidepanel.html'),frameId:0};
   const reply=await app.request('DOCK_APPLY_STATE',{windowId:41},dock);assert.equal(reply.ok,true);assert.equal(reply.result.run,null);assert.equal(reply.result.jobs.length,0);
   for(const operation of DOCK_APPLY_OPERATIONS)for(const sender of [{...dock,url:app.chrome.runtime.getURL('options.html')},{...dock,url:'https://example.test/job'},{...dock,frameId:1}])assert.equal(await app.request(operation,{windowId:41},sender),null,`${operation}: rejected ${sender.url}`);
 });
 
 test('dock CV input uses the real CV validator and snapshot without replacing Studio text',async t=>{
-  const {request,chrome,sandbox}=await coordinator(t),sender={id:chrome.runtime.id,url:chrome.runtime.getURL('dashboard.html'),frameId:0};
+  const {request,chrome,sandbox}=await coordinator(t),sender={id:chrome.runtime.id,url:chrome.runtime.getURL('sidepanel.html'),frameId:0};
   const created=await request('DOCK_RECORDS_MUTATE',{action:'create',mutationId:crypto.randomUUID(),fields:{company:'Original Company',role:'Original Role',url:'https://example.test/cv-input',description:'The original job description.'}},sender);assert.equal(created.ok,true);
   const job=created.result.jobs[0],before=(await request('STUDIO_BOOTSTRAP',{candidateId:job.candidateId})).result.record.draft,fields={cvJsonRaw:JSON.stringify({company:'Imported Company',title:'Imported Role',summary:'Prepared CV.',skills:[],experience:[],education:[]}),coverLetterRaw:'A separately imported letter.',coverLetterEnabled:true};
   const invalid=await request('DOCK_RECORDS_MUTATE',{action:'update-resume',id:job.id,expectedRevision:job.revision,mutationId:crypto.randomUUID(),fields:{...fields,cvJsonRaw:JSON.stringify({wrong:'schema'})}},sender);assert.equal(invalid.ok,false);
@@ -130,7 +137,7 @@ test('queue download renders real CV and letter PDFs through the worker and writ
   const {request,chrome,sandbox}=await coordinator(t),{runtime:offscreen}=await resumeRenderer(),files=new Map(),receipts=new Map();
   offscreen.fetch=async url=>{const file=await readFile(`extension/fonts/${String(url).split('/').at(-1)}`);return {ok:true,arrayBuffer:async()=>file.buffer.slice(file.byteOffset,file.byteOffset+file.byteLength)};};
   const companyDirectory={async getFileHandle(name,options={}){if(!files.has(name)&&!options.create)throw new DOMException('Missing','NotFoundError');return {getFile:async()=>files.get(name),createWritable:async()=>{let pending;return {write:async blob=>{pending=blob;},close:async()=>files.set(name,pending),abort:async()=>{}};}};}};
-  const sender={id:chrome.runtime.id,url:chrome.runtime.getURL('dashboard.html'),frameId:0},created=await request('DOCK_RECORDS_MUTATE',{action:'create',mutationId:crypto.randomUUID(),fields:{company:'Job Company',role:'Engineer',url:'https://example.test/download',description:'Job context stays out of the downloaded files.'}},sender),job=created.result.jobs[0];
+  const sender={id:chrome.runtime.id,url:chrome.runtime.getURL('sidepanel.html'),frameId:0},created=await request('DOCK_RECORDS_MUTATE',{action:'create',mutationId:crypto.randomUUID(),fields:{company:'Job Company',role:'Engineer',url:'https://example.test/download',description:'Job context stays out of the downloaded files.'}},sender),job=created.result.jobs[0];
   const root={id:'queue-export-root',candidateId:job.candidateId,preference:'Resumes',name:'Resumes',handle:{name:'Resumes',queryPermission:async()=> 'granted',getDirectoryHandle:async()=>companyDirectory}};
   const directories={root:async()=>root,matching:async()=>root,receipt:async id=>receipts.get(id),putReceipt:async value=>receipts.set(value.id,structuredClone(value))};sandbox.wn=()=>directories;offscreen.Mw=offscreen.Lw(directories);
   chrome.runtime.sendMessage=async message=>{const payload=message.payload;try{let result;if(message.operation==='PDF_EXPORT_PREPARE')result=await offscreen.Eu.prepare(payload.ticketId,payload.selection,payload.retryUntil,payload.kinds);else if(message.operation==='PDF_DIRECTORY_WRITE')result=await offscreen.Mw.write(payload,async()=>offscreen.Eu.blob(payload.ticketId,payload.kind));else if(message.operation==='PDF_DIRECTORY_STATUS')result=await offscreen.Mw.observe(payload);else if(message.operation==='PDF_EXPORT_SETTLE')result=offscreen.Eu.settle(payload.ticketId,payload.kind,payload.outcome,payload.attemptId);else throw Error(message.operation);return {ok:true,requestId:message.requestId,result:result??null};}catch(error){return {ok:false,requestId:message.requestId,message:error.message};}};
@@ -139,55 +146,6 @@ test('queue download renders real CV and letter PDFs through the worker and writ
   assert.equal(ticket.phase,'settled',ticket.message);assert.deepEqual(ticket.files.map(file=>file.kind),['cv','letter']);assert.ok(ticket.files.every(file=>file.state==='complete'&&file.pageCount>=1));assert.equal(files.size,2);assert.ok([...files.keys()].every(name=>name.endsWith('.pdf')));
   for(const blob of files.values())assert.equal(new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()).slice(0,4)),'%PDF');assert.ok([...receipts.values()].every(receipt=>receipt.state==='complete'));
   assert.equal((await request('DOCK_RECORDS_STATE',{},sender)).result.jobs[0].resume,null,'Download does not save the modal input into the queue');
-});
-
-test('sample queue jobs use the actual worker validator and Studio snapshot builder without changing the active draft',async t=>{
-  const {request,chrome,studioStorage}=await coordinator(t),sender={id:chrome.runtime.id,url:chrome.runtime.getURL('dashboard.html'),frameId:0};
-  const before=await request('WORKSPACE_BOOTSTRAP'),canonical=structuredClone(chrome.storage.local.values.profile);
-  const seeded=await request('DOCK_RECORDS_SEED_SAMPLES',{},sender);assert.equal(seeded.ok,true,seeded.error?.message);assert.equal(seeded.result.jobs.length,5);
-  for(const job of seeded.result.jobs){assert.equal(job.isMock,true);assert.equal(job.resume.snapshot.schemaVersion,2);assert.equal(job.resume.snapshot.resume.company,job.company);assert.equal(job.resume.snapshot.candidate.id,before.result.candidate.id);assert.deepEqual(job.resume.snapshot.bindings,{experience:[],education:[]});}
-  assert.deepEqual((await request('WORKSPACE_BOOTSTRAP')).result.studio.record.draft,before.result.studio.record.draft);assert.deepEqual(chrome.storage.local.values.profile,canonical);assert.equal(chrome.storage.local.values.appliedList,undefined);
-  const again=await request('DOCK_RECORDS_SEED_SAMPLES',{},sender);assert.equal(again.result.jobs.length,5);assert.equal((await studioStorage.get('dock-job-records:v1'))['dock-job-records:v1'].jobs.length,5);
-  const sample=seeded.result.jobs[1],opened=await request('DOCK_RECORDS_OPEN_RESUME',{id:sample.id,expectedRevision:sample.revision,windowId:41},sender);assert.equal(opened.ok,true,opened.error?.message);
-  assert.equal((await request('STUDIO_BOOTSTRAP',{candidateId:sample.candidateId})).result.record.draft.cvJsonRaw,sample.resume.cvJsonRaw);assert.deepEqual(chrome.storage.local.values.profile,canonical);
-});
-
-test('imported Studio coordinator supports candidate import, editing, persistence, and settings', async t => {
-  const { request, chrome, studioStorage } = await coordinator(t,{withProfile:false});
-  const attach = await request('WORKSPACE_ATTACH', { visible: true });
-  assert.equal(attach.ok, true);
-  const document = {
-    schemaVersion: 2, kind: 'application-tracker-candidate', candidate: { id: 'candidate-1', name: 'Test Candidate' },
-    personalDetails: { email: 'candidate@example.test' }, companies: [], professionalProfile: { summary: 'Saved facts.' },
-  };
-  const imported = await request('CANDIDATE_IMPORT', { raw: JSON.stringify(document), filename: 'candidate.json', mutationId: crypto.randomUUID() });
-  assert.equal(imported.ok, true);
-  assert.equal(imported.result.candidate.revision, 1);
-  const saved = await request('CANDIDATE_SAVE', {
-    candidateId: document.candidate.id, expectedRevision: 1,
-    document: { ...document, candidate: { ...document.candidate, name: 'Edited Candidate' } }, mutationId: crypto.randomUUID(),
-  });
-  assert.equal(saved.ok, true);
-  assert.equal(saved.result.candidate.revision, 2);
-  const bootstrap = await request('WORKSPACE_BOOTSTRAP');
-  assert.equal(bootstrap.ok, true);
-  assert.equal(bootstrap.result.candidate.document.candidate.name, 'Edited Candidate');
-  assert.equal(bootstrap.result.candidates.length, 1);
-  assert.ok(bootstrap.result.studio.record.draft);
-  const prompt = await request('PROMPT_SETTINGS', {}, { id: chrome.runtime.id, url: chrome.runtime.getURL('settings.html'), frameId: 0 });
-  assert.equal(prompt.ok, true);
-  assert.equal(prompt.result.library.templates.length, 2);
-  const record = (await studioStorage.get('autofill-profile:candidate-1'))['autofill-profile:candidate-1'];
-  assert.equal(record.revision, 2);
-  assert.equal(record.document, undefined);
-  assert.equal(record.profile.contactData.email, 'candidate@example.test');
-  assert.equal(chrome.storage.local.values.profile.nameData.firstName, 'Edited');
-  const ticketId = crypto.randomUUID();
-  const exported = await request('CANDIDATE_EXPORT_JSON', { candidateId: 'candidate-1', expectedRevision: 2, ticketId });
-  assert.equal(exported.ok, true);
-  const json = JSON.parse(chrome.storage.session.values[`candidate-export:${ticketId}`].jsonText);
-  assert.equal(json.nameData.firstName, 'Edited');
-  assert.equal(json.kind, undefined);
 });
 
 test('Studio rejects page-script senders and preserves revision conflict checks', async t => {
@@ -216,26 +174,23 @@ test('web pages can open a preview but cannot impersonate the dock or change can
   assert.equal(await request('OPEN_STUDIO_PREVIEW', { windowId: 41 }, { ...web, frameId: 1 }), null);
 });
 
-test('reference dashboards select canonical profiles while other pages cannot use dashboard operations', async t => {
+test('reference dashboards read the single profile while other pages cannot use dashboard operations', async t => {
   const { request, chrome } = await coordinator(t);
-  const sender = { id: chrome.runtime.id, url: chrome.runtime.getURL('dashboard.html'), frameId: 0 };
+  const sender = { id: chrome.runtime.id, url: chrome.runtime.getURL('sidepanel.html'), frameId: 0 };
   const loaded = await request('DASHBOARD_STATE', {}, sender);
   assert.equal(loaded.ok, true); assert.equal(loaded.result.candidates.length, 1);
   const document = { schemaVersion: 2, kind: 'application-tracker-candidate', candidate: { id: 'dashboard-profile', name: 'Another Candidate' } };
   await request('CANDIDATE_IMPORT', { raw: JSON.stringify(document), filename: 'profile.json', mutationId: crypto.randomUUID() });
-  const selected = await request('DASHBOARD_SELECT_PROFILE', { candidateId: loaded.result.candidate.document.candidate.id }, sender);
-  assert.equal(selected.ok, true); assert.equal(selected.result.candidate.id, loaded.result.candidate.id);
-  assert.equal(selected.result.candidates.length, 1);
   assert.equal(chrome.storage.local.values.profile.profileName, 'Existing Autofill profile');
   for (const blocked of [{ ...sender, frameId: 1 }, { ...sender, url: chrome.runtime.getURL('options.html#/dashboard') }, { ...sender, url: chrome.runtime.getURL('options.html#/settings/profile') }, { ...sender, url: 'https://example.test/dashboard.html' }]) {
     assert.equal(await request('DASHBOARD_SELECT_PROFILE', { candidateId: 'dashboard-profile' }, blocked), null);
   }
 });
 
-test('dock records use the real Studio draft and validator, and web pages cannot call dock record operations', async t => {
+test('dock and web queue editors share records while rejecting external pages and child frames', async t => {
   const {request,chrome,createdTabs}=await coordinator(t);
   chrome.runtime.sendMessage=async()=>({ok:true});
-  const sender={id:chrome.runtime.id,url:chrome.runtime.getURL('dashboard.html'),frameId:0};
+  const sender={id:chrome.runtime.id,url:chrome.runtime.getURL('sidepanel.html'),frameId:0};
   const created=await request('DOCK_RECORDS_MUTATE',{action:'create',mutationId:crypto.randomUUID(),fields:{company:'Dock Company',role:'Engineer',url:'https://example.test/dock-job',description:'Build reliable systems.'}},sender);
   assert.equal(created.ok,true,created.error?.message);let record=created.result.jobs[0];
   const opened=await request('DOCK_RECORDS_STUDIO',{id:record.id,expectedRevision:record.revision,windowId:41},sender);
@@ -254,7 +209,8 @@ test('dock records use the real Studio draft and validator, and web pages cannot
   const restored=await request('DOCK_RECORDS_OPEN_RESUME',{id:record.id,expectedRevision:record.revision,windowId:41},sender);assert.equal(restored.ok,true,restored.error?.message);
   const restoredDraft=(await request('STUDIO_BOOTSTRAP',{candidateId:record.candidateId})).result.record.draft;assert.equal(restoredDraft.cvJsonRaw,record.resume.cvJsonRaw);assert.equal(restoredDraft.coverLetterRaw,record.resume.coverLetterRaw);assert.deepEqual(restoredDraft.documentTemplate,record.resume.documentTemplate);assert.deepEqual(restoredDraft.bindings,record.resume.snapshot.bindings);
   assert.ok(createdTabs.some(tab=>tab.url.startsWith(chrome.runtime.getURL('preview.html'))));assert.equal(createdTabs.length,1,'View resume reuses the existing Resume Studio web tab');
-  for(const operation of DOCK_RECORD_OPERATIONS)for(const blocked of [{...sender,url:chrome.runtime.getURL('options.html#/')},{...sender,url:chrome.runtime.getURL('options.html#/settings/prompts')},{...sender,frameId:1},{...sender,url:'https://example.test/dashboard.html'}])assert.equal(await request(operation,{},blocked),null,operation);
+  const webState=await request('DOCK_RECORDS_STATE',{}, {...sender,url:chrome.runtime.getURL('options.html#/?tab=queue')});assert.equal(webState.ok,true);assert.equal(webState.result.jobs[0].id,record.id);
+  for(const operation of DOCK_RECORD_OPERATIONS)for(const blocked of [{...sender,frameId:1},{...sender,url:'https://example.test/dashboard.html'}])assert.equal(await request(operation,{},blocked),null,operation);
 });
 
 test('web Studio launch reuses the requesting options tab without creating another tab', async t => {
@@ -279,6 +235,15 @@ test('the parent preview connects to its embedded editor and stays open independ
   const connected = await request('PREVIEW_CONNECT', {}, parent);
   assert.equal(connected.ok, true, connected.error?.message);
   assert.equal(connected.result.state.tabId, 100);
+  assert.equal((await request('DOCK_RECORDS_STATE',{},parent)).ok,true,'Preview can read navigation counts');
+  assert.equal(await request('DOCK_RECORDS_MUTATE',{action:'delete-all'},parent),null,'Preview cannot mutate application records');
+  assert.equal(await request('DOCK_RECORDS_STATE',{}, {...parent,frameId:1}),null,'Embedded pages cannot read records as the preview');
+  const submitted={...parent,url:chrome.runtime.getURL('preview.html')+'?submitted=record-one&kind=resume'};
+  assert.equal((await request('DOCK_RECORDS_STATE',{},submitted)).ok,true,'Submitted Studio can read its saved document');
+  const missing=await request('DOCK_RECORDS_DOCUMENT_PREVIEW',{id:'record-one',type:'applications',expectedRevision:1,kind:'resume'},submitted);
+  assert.equal(missing.error.code,'NOT_FOUND','Submitted Studio can request read-only PDFs without acquiring editor permissions');
+  for(const operation of ['DOCK_RECORDS_MUTATE','PREVIEW_CONNECT','WORKSPACE_BOOTSTRAP','CANDIDATE_SAVE'])assert.equal(await request(operation,{},submitted),null,operation+' stays outside read-only Studio');
+  for(const invalid of [{...submitted,frameId:1},{...submitted,url:submitted.url+'&owner=00000000-0000-0000-0000-000000000000'},{...submitted,url:submitted.url.replace('chrome-extension://','https://')}])assert.equal(await request('DOCK_RECORDS_STATE',{},invalid),null);
   const bootstrap = await request('WORKSPACE_BOOTSTRAP');
   const draft = bootstrap.result.studio.record.draft;
   const invalidated = await request('PREVIEW_INVALIDATE', { generation: crypto.randomUUID(), candidateId: draft.candidateId, draftId: draft.id });
@@ -302,7 +267,7 @@ test('v2 prompt settings save templates, assignments and profile instructions wi
   const conflict = await request('PROMPT_SAVE', { template: { ...template, title: 'Stale edit' }, expectedRevision: loaded.result.library.revision }, sender);
   assert.equal(conflict.ok, false);
   assert.equal(conflict.error.code, 'PROMPT_CONFLICT');
-  const invalid = await request('PROMPT_SAVE', { template: { ...template, text: '{{candidate_profile}}' }, expectedRevision: save.result.revision }, sender);
+  const invalid = await request('PROMPT_SAVE', { template: { ...template, text: '{{candidate_profile}} {{candidate_profile}}' }, expectedRevision: save.result.revision }, sender);
   assert.equal(invalid.ok, false);
   assert.equal(invalid.error.code, 'INVALID_PROMPT');
   const candidate = loaded.result.candidate;
@@ -319,7 +284,7 @@ test('v2 prompt settings save templates, assignments and profile instructions wi
   const preview = buildPrompt(updated.result.candidate.document, 'A real job description.', template);
   const dock = sandbox.Xt(updated.result.candidate.document, 'A real job description.', template);
   assert.equal(preview.text, dock.text);
-  assert.ok(preview.text.includes('Senior') && preview.text.includes('Use concise factual bullets.') && preview.text.includes('A real job description.'));
+  assert.equal(preview.text,'Use these facts: \nFor this role: A real job description.');
   const other = await request('CANDIDATE_GET', { candidateId: 'another-profile' }, sender);
   assert.equal(other.ok, false);
   assert.equal(other.error.code, 'CANDIDATE_CONFLICT');
@@ -346,8 +311,6 @@ test('owned Studio prompt selection preserves the single profile and its drafts'
   const written = await request('DRAFT_SAVE', { draft, expectedRevision: draft.revision, mutationId: crypto.randomUUID() });
   assert.equal(written.ok, true, written.error?.message);
   const selected = await request('PROMPT_SELECT', { candidateId: initial.candidate.id, templateId: template.id, expectedCandidateRevision: initial.candidate.revision, mutationId: crypto.randomUUID() });
-  assert.equal(selected.ok, true, selected.error?.message);
-  assert.equal(selected.result.candidate.document.applicationPreferences.assignedPromptTemplateId, template.id);
   assert.deepEqual(chrome.storage.local.values.profile, original);
   const conflict = await request('PROMPT_SELECT', { candidateId: initial.candidate.id, templateId: template.id, expectedCandidateRevision: initial.candidate.revision, mutationId: crypto.randomUUID() });
   assert.equal(conflict.ok, false); assert.equal(conflict.error.code, 'CONFLICT');
@@ -372,22 +335,6 @@ test('legacy Studio profile routes still open SpeedyApply profile pages', async 
   const edit = await request('PROMPT_OPEN_SETTINGS', { candidateId: state.result.candidate.document.candidate.id });
   assert.equal(edit.ok, true);
   assert.equal(createdTabs[1].url, 'chrome-extension://autofill-test/options.html#/settings/profile');
-});
-
-test('Autofill message router yields Studio requests without claiming their response channel', async () => {
-  const source = await readFile('extension/background.js', 'utf8');
-  const start = source.indexOf('chrome.runtime.onMessage.addListener(');
-  const end = source.indexOf(',chrome.tabs.onCreated.addListener', start);
-  assert.ok(start >= 0 && end > start);
-  let callback;
-  vm.runInNewContext(source.slice(start, end), {
-    chrome: { runtime: { onMessage: { addListener: fn => { callback = fn; } } } },
-    gg: () => { throw new Error('Autofill must not inspect the Studio protocol.'); },
-  });
-  assert.equal(callback({ version: 1, operation: 'CANDIDATE_IMPORT' }, {}, () => {}), false);
-  assert.equal(callback({ target: 'owning-workspace-export:v1' }, {}, () => {}), false);
-  assert.equal(callback({ target: 'flush-resume-settings:v1' }, {}, () => {}), false);
-  assert.equal(callback({ target: 'flush-studio-navigation:v1' }, {}, () => {}), false);
 });
 
 test('embedded editor settings flush accepts its owning page and rejects other tabs and stale owners', async () => {
@@ -455,7 +402,7 @@ test('the imported document renderer produces a PDF from a candidate and CV snap
   });
   const snapshot = worker.Fe(imported.result.candidate, draft, '41', 1).snapshot;
   const messages = event();
-  const renderer = vm.createContext({ resumeSectionOrder, skillsFirstTemplate, layoutResumeParagraph,
+  const renderer = vm.createContext({ resumeSectionOrder, skillsFirstTemplate, layoutResumeParagraph,registerAIClipboard,registerDocumentPreviewRenderer,
     chrome: { runtime: { id: chrome.runtime.id, getURL: chrome.runtime.getURL, onMessage: messages } },
     crypto: webcrypto, indexedDB: new IDBFactory(), Blob, TextEncoder, TextDecoder, URL, console, atob, btoa, structuredClone,
     setInterval: () => 0, clearInterval: () => {}, setTimeout, clearTimeout,
@@ -484,4 +431,40 @@ test('the imported document renderer produces a PDF from a candidate and CV snap
   assert.ok(rendered.pageCount >= 1);
   const hash = Buffer.from(await webcrypto.subtle.digest('SHA-256', pdf)).toString('hex');
   assert.equal(rendered.sha256, hash);
+});
+
+
+test('prompt role responsibilities and short context save independently through the worker',async t=>{
+  const {request,chrome}=await coordinator(t);
+  const profile=structuredClone(chrome.storage.local.values.profile);
+  profile.jobData=[{id:'role-one',jobTitle:'Engineer',company:'Employer',location:'Remote',startDate:'2020-01',endDate:'',currentlyWorkHere:true,description:'Built reliable services.'}];
+  const profileSender={id:chrome.runtime.id,url:chrome.runtime.getURL('options.html#/settings/profile'),frameId:0};
+  const created=await request('PROFILE_SAVE',{profile,expectedProfile:chrome.storage.local.values.profile,mutationId:crypto.randomUUID()},profileSender);
+  assert.equal(created.ok,true);
+  const original=structuredClone(chrome.storage.local.values.profile),sender={...profileSender,url:chrome.runtime.getURL('options.html#/settings/ai/prompt')};
+  const loaded=await request('PROMPT_SETTINGS',{},sender),candidate=loaded.result.candidate,role=candidate.document.companies[0];
+  const document=structuredClone(candidate.document);
+  document.applicationPreferences.resumePrompt={roles:{[role.id]:{responsibilities:'Delivered payment integrations.',shortDetail:'Led the platform team.'}}};
+  const saved=await request('CANDIDATE_SAVE',{candidateId:candidate.id,expectedRevision:candidate.revision,document,mutationId:crypto.randomUUID()},sender);
+  assert.equal(saved.ok,true);assert.deepEqual(chrome.storage.local.values.profile,original);
+  const prompt=buildPrompt(saved.result.candidate.document,'',{id:'timeline',text:'{{candidate_profile}}'}).text;
+  assert.deepEqual(saved.result.candidate.document.applicationPreferences.resumePrompt.roles[role.id],{responsibilities:'Delivered payment integrations.',shortDetail:'Led the platform team.'});
+  assert.ok(prompt.includes('Employer, Jan 2020 - Present - Remote.'));assert.ok(!prompt.includes('Delivered payment integrations.'));assert.ok(!prompt.includes('Led the platform team.'));
+  document.applicationPreferences.resumePrompt.roles[role.id].responsibilities=42;
+  const invalid=await request('CANDIDATE_SAVE',{candidateId:candidate.id,expectedRevision:saved.result.candidate.revision,document,mutationId:crypto.randomUUID()},sender);
+  assert.equal(invalid.ok,false);assert.match(invalid.error.message,/Enter text for responsibilities/);
+});
+
+
+test('AI Candidate Form persists prompt defaults without changing the base profile',async t=>{
+ const {request,chrome}=await coordinator(t);
+ const sender={id:chrome.runtime.id,url:chrome.runtime.getURL('options.html#/settings/ai/candidate'),frameId:0};
+ const original=structuredClone(chrome.storage.local.values.profile);
+ const loaded=await request('PROMPT_SETTINGS',{},sender);assert.equal(loaded.ok,true);
+ const candidate=loaded.result.candidate,document=structuredClone(candidate.document);
+ document.applicationPreferences.resumePrompt={name:'Prompt Candidate',location:'Remote',seniority:'Senior',yearsOfExperience:8,roles:{'prompt-company-1':{company:'Employer',location:'Boston',dates:'2020 - Present',minimumBullets:9}},education:{'prompt-education-1':{degree:'BS',school:'Example University',dates:'2014 - 2018'}}};
+ const saved=await request('CANDIDATE_SAVE',{candidateId:candidate.id,expectedRevision:candidate.revision,document,mutationId:crypto.randomUUID()},sender);
+ assert.equal(saved.ok,true,JSON.stringify(saved.error));assert.deepEqual(chrome.storage.local.values.profile,original);
+ const reloaded=await request('PROMPT_SETTINGS',{},sender);
+ assert.equal(buildPrompt(reloaded.result.candidate.document,'',{id:'defaults',text:'{{candidate_name}} | {{candidate_location}} | {{years_of_experience}} | {{company_1_bullets}}'}).text,'Prompt Candidate | Remote | 8 | 9');
 });

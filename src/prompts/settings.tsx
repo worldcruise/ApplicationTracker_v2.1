@@ -9,11 +9,13 @@ import { StatusBar } from './status-bar';
 import { useCandidateEditor } from './candidate-editor';
 import { candidateFields } from './candidate-fields';
 import { studioStorage } from '../../extension/studio/storage.js';
+import { GenerationPromptSelection } from './generation-prompt-selection';
+import { WritingPromptEditor } from './ai-apply-prompts';
 
 export function PromptSettings() {
   const [state, setState] = useState(null), [editing, setEditing] = useState(null);
   const [editRevision, setEditRevision] = useState(0), [busy, setBusy] = useState(false), [message, setMessage] = useState(null);
-  const [promptView, setPromptView] = useState('resume'), [resumeFeedback, setResumeFeedback] = useState(null);
+  const [promptView, setPromptView] = useState('instruction'), [resumeFeedback, setResumeFeedback] = useState(null);
   const saving = useRef(false), epoch = useRef(0), alive = useRef(true);
   const editor = useCandidateEditor(state?.candidate ?? null);
   const fail = error => { if (alive.current) setMessage({ key: 'settings', token: crypto.randomUUID(), level: 'error', sticky: true,
@@ -70,19 +72,26 @@ export function PromptSettings() {
     : unavailable ? [{ key: 'unavailable', token: String(selectedId), level: 'warning', message: 'The assigned template is unavailable. Choose a saved prompt.' }] : [];
   const application = editor.document ? candidateFields({ ...editor, document: editor.document }) : null;
   return <section className="prompt-settings" aria-labelledby="prompt-settings-title">
-    <header className="settings-pane-heading"><div><span className="web-eyebrow">Writing preferences</span><h2 id="prompt-settings-title">Prompt settings</h2><p>Choose how Resume Studio uses your profile and job descriptions.</p></div>
+    <header className="settings-pane-heading"><div><h2 id="prompt-settings-title">Prompt settings</h2></div>
       {state?.candidate && <span className="web-profile-badge">{state.candidate.document.candidate.name}</span>}</header>
-    <div className="prompt-views" role="group" aria-label="Prompt types">{[['resume', 'Resume Prompt Template'], ['application', 'Application Prompts']].map(([id, label]) => <button type="button" key={id} className="button button-secondary" aria-pressed={promptView === id} onClick={() => setPromptView(id)}>{label}</button>)}</div>
-    <StatusBar messages={[...editor.messages, ...messages, ...(resumeFeedback ? [resumeFeedback] : [])]} />
+    <GenerationPromptSelection candidate={editor.document} resumePrompt={editing?.text ?? selected.text} />
+    <div className="prompt-views" role="group" aria-label="Prompt types">{[['instruction', 'Instruction'], ['jdAnalysis', 'JD'], ['resume', 'Resume'], ['coverLetter', 'Cover letter'], ['autofill', 'Autofill']].map(([id, label]) => <button type="button" key={id} className="button button-secondary" aria-pressed={promptView === id} onClick={() => setPromptView(id)}>{label}</button>)}</div>
+    {(editor.messages.length>0||messages.length>0||resumeFeedback)&&<StatusBar messages={[...editor.messages,...messages,...(resumeFeedback?[resumeFeedback]:[])]} />}
+    <div hidden={promptView !== 'coverLetter'}><WritingPromptEditor candidate={editor.document} kind="coverLetter" /></div>
+    <div hidden={promptView !== 'autofill'}><WritingPromptEditor candidate={editor.document} kind="autofill" /></div>
+    <div hidden={promptView !== 'instruction'}><WritingPromptEditor candidate={editor.document} kind="instruction" /></div>
+    <div hidden={promptView !== 'jdAnalysis'}><WritingPromptEditor candidate={editor.document} kind="jdAnalysis" /></div>
+
     <div hidden={promptView !== 'resume'}><ResumePrompt editor={editor} selected={selected} editing={editing} busy={busy} onEdit={edit} onSave={() => void save()} onCancel={() => { setEditing(null); setMessage(null); }} onFeedback={setResumeFeedback}
       toolbar={<div className="prompt-picker-row"><button type="button" className="button button-secondary" disabled={!state || busy || Boolean(editing)} aria-label="Preview and edit prompt" onClick={() => edit({})}>Edit prompt</button>
         <label>Saved template<select value={unavailable ? selectedId : selected.id} disabled={!state || busy || Boolean(editing)} onChange={event => void select(event.target.value)}>
           {unavailable && <option value={selectedId} disabled>Unavailable template</option>}{(state?.library.templates ?? [DEFAULT_PROMPT]).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
         </select></label><button type="button" className="button button-secondary" disabled={!state || busy || Boolean(editing)} onClick={() => { setEditing({ id: crypto.randomUUID(), title: 'New prompt', text: editableTemplate(selected.text) }); setEditRevision(state.library.revision); setMessage(null); }}>New prompt</button></div>} />
     </div>
-    <div hidden={promptView !== 'application'}>{application ? <><div className="settings-pane-heading"><div><h3>Application instructions</h3><p>Keep reusable instructions and answers with this profile.</p></div><button type="button" className="button button-primary" disabled={editor.busy || busy} onClick={() => void editor.save()}>Save Prompts</button></div>
+    <div hidden={promptView==='autofill'}><details className="setup-group final-json-settings"><summary>Final JSON structure</summary><WritingPromptEditor kind="finalJson" /></details></div>
+    <div hidden={promptView !== 'autofill'}><details className="setup-group"><summary>Application instructions and reusable answers</summary>{application ? <><div className="settings-pane-heading"><div><h3>Application instructions</h3><p>Keep reusable instructions and answers with this profile.</p></div><button type="button" className="button button-primary" disabled={editor.busy || busy} onClick={() => void editor.save()}>Save Prompts</button></div>
       <fieldset disabled={editor.busy}>{application.collection('Prompt instructions', ['customPromptInstructions'], [{ key: 'title', label: 'Name' }, { key: 'text', label: 'Instructions', kind: 'multiline' }], { add: 'Add Prompt' })}
       <section className="setup-group"><h3>Reusable answers</h3>{application.collection('Reusable answers', ['customAnswers'], [{ key: 'question', label: 'Question', kind: 'multiline' }, { key: 'answer', label: 'Answer', kind: 'multiline' }], { add: 'Add Answer' })}</section></fieldset>
-    </> : <p>Create a profile in Settings to edit application prompts and reusable answers.</p>}</div>
+    </> : <p>Create a profile in Settings to edit application prompts and reusable answers.</p>}</details></div>
   </section>;
 }

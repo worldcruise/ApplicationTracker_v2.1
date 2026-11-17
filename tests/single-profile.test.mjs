@@ -20,7 +20,7 @@ test('resume uploads create then update one canonical profile, preserving identi
   const selected=await profiles.save({candidateId:first.id,expectedRevision:first.revision,document:edited,mutationId:crypto.randomUUID()});
   parsed={nameData:{firstName:'Updated',lastName:'Person',preferredName:false},skillsData:['TypeScript'],jobData:[{jobTitle:'Engineer',company:'Example',location:'Remote',startDate:'2020-01',currentlyWorkHere:true,description:'Build software'}],educationData:[]};
   const next=(await service.handle('PROFILE_RESUME_UPLOAD',{...upload,fileName:'replacement.docx',expectedRevision:selected.revision,mutationId:crypto.randomUUID()})).candidate;
-  assert.equal(next.id,first.id);assert.equal(next.profile.nameData.firstName,'Updated');assert.deepEqual(next.profile.skillsData,['TypeScript']);assert.equal(next.profile.resumeData.fileName,'replacement.docx');assert.equal(next.document.applicationPreferences.assignedPromptTemplateId,'saved-prompt');assert.equal((await profiles.list()).length,1);
+  assert.equal(next.id,first.id);assert.equal(next.profile.nameData.firstName,'Updated');assert.deepEqual(next.profile.skillsData,['JavaScript','TypeScript']);assert.equal(next.profile.resumeData.fileName,'replacement.docx');assert.equal(next.document.applicationPreferences.assignedPromptTemplateId,'saved-prompt');assert.equal((await profiles.list()).length,1);
   assert.equal((await browser.storage.local.get('profile')).profile.nameData.firstName,'Updated');
   assert.ok((await storage.get(`profile-backup:replacement:${first.id}:${selected.revision}`))[`profile-backup:replacement:${first.id}:${selected.revision}`]);
   await assert.rejects(service.handle('PROFILE_RESUME_UPLOAD',{...upload,expectedRevision:first.revision,mutationId:crypto.randomUUID()}),/profile changed/i);
@@ -28,11 +28,22 @@ test('resume uploads create then update one canonical profile, preserving identi
   await assert.rejects(service.handle('PROFILE_RESUME_UPLOAD',{...upload,fileName:'script.js',expectedRevision:next.revision}),/PDF or DOCX/);
   const replaced=structuredClone(next.profile);replaced.resumeData={...replaced.resumeData,resumeBase64:'bmV3',fileName:'editor-replacement.pdf'};parsed={nameData:{firstName:'Replacement',lastName:'Person',preferredName:false},skillsData:['New resume facts'],jobData:[],educationData:[]};
   const throughEditor=(await service.handle('PROFILE_SAVE',{profile:replaced,expectedProfile:next.profile,mutationId:crypto.randomUUID()})).candidate;
-  assert.equal(throughEditor.id,next.id);assert.equal(throughEditor.profile.nameData.firstName,'Replacement');assert.deepEqual(throughEditor.profile.skillsData,['New resume facts']);assert.equal(throughEditor.profile.resumeData.fileName,'editor-replacement.pdf');
+  assert.equal(throughEditor.id,next.id);assert.equal(throughEditor.profile.nameData.firstName,'Replacement');assert.deepEqual(throughEditor.profile.skillsData,['JavaScript','TypeScript','New resume facts']);assert.equal(throughEditor.profile.resumeData.fileName,'editor-replacement.pdf');assert.equal(throughEditor.profile.jobData.length,next.profile.jobData.length);
 });
 
 test('profile upload requests are limited to the extension Profile page',()=>{
   const browser={runtime:{id:'test',getURL:path=>`chrome-extension://test/${path}`}},sender={id:'test',frameId:0,url:'chrome-extension://test/options.html#/settings/profile'};
   assert.equal(isProfileSettingsSender(sender,browser),true);
   for(const patch of [{id:'other'},{frameId:1},{url:'https://example.test/options.html#/settings/profile'},{url:'chrome-extension://test/options.html#/settings/prompts'}])assert.equal(isProfileSettingsSender({...sender,...patch},browser),false);
+});
+
+test('reviewed PDF JSON saves without reparsing and rejects stale profiles',async()=>{
+  let saved,parsed=0;const initial={id:'one',revision:1,profile:emptyProfile()};
+  const profiles={bootstrap:async()=>initial,replaceProfile:async value=>{saved=value;return{...initial,profile:value.profile};}};
+  const service=createSingleProfileService({profiles,parseResume:()=>{parsed++;throw Error('Must use reviewed JSON');}});
+  const profile={...emptyProfile(),nameData:{firstName:'Reviewed',lastName:'Name',preferredName:false},resumeData:{resumeBase64:btoa('%PDF-1.7 source'),fileName:'resume.pdf',fileSize:15,dateUploaded:new Date().toISOString()}};
+  const payload={profile,expectedProfile:initial.profile,mutationId:crypto.randomUUID()};
+  await service.handle('PROFILE_RESUME_IMPORT',payload);assert.equal(parsed,0);assert.equal(saved.profile.nameData.firstName,'Reviewed');assert.equal(saved.filename,'resume.pdf');
+  await assert.rejects(service.handle('PROFILE_RESUME_IMPORT',{...payload,expectedProfile:null}),/profile changed/);
+  await assert.rejects(service.handle('PROFILE_RESUME_IMPORT',{...payload,profile:{...profile,resumeData:{...profile.resumeData,resumeBase64:btoa('invalid')}}}),/valid PDF/);
 });

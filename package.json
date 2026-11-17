@@ -1,6 +1,6 @@
 {
   "name": "application-tracker-v2-1",
-  "version": "2.1.24",
+  "version": "2.1.27",
   "private": true,
   "description": "Application Tracker 2.1 extension development.",
   "type": "module",
@@ -20,5 +20,9 @@
     "fake-indexeddb": "^6.2.7",
     "happy-dom": "^21.0.4",
     "lucide": "0.468.0"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

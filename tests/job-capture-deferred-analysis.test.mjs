@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {Window} from 'happy-dom';
+import {createStudio} from '../extension/ai-apply/src/studio.mjs';
+import {createJobQueue} from '../extension/ai-apply/src/job-queue.mjs';
+import {setQueueBackend} from '../extension/ai-apply/src/queue-store.mjs';
+import {dockFixture,event} from './helpers/dock-records-fixture.mjs';
+
+for(const sourceUrl of ['https://employer.test/job','https://hiring.cafe/?job=example'])test(`capture queues immediately with old AI setting enabled: ${sourceUrl}`,async t=>{
+  const app=await dockFixture(t),win=new Window({url:'chrome-extension://test/ai-apply/index.html'});
+  win.document.write(await readFile('extension/ai-apply/index.html','utf8'));
+  const previous={document:globalThis.document,window:globalThis.window,chrome:globalThis.chrome};
+  const fields={company:'Employer',role:'Engineer',url:sourceUrl,description:'Build reliable systems. Salary: USD 100000 per year'};
+  const browser={...app.browser,permissions:{request:async()=>true},tabs:{...app.browser.tabs,onUpdated:event(),onRemoved:event(),get:async()=>({id:7,url:sourceUrl})},runtime:{...app.browser.runtime,sendMessage:async message=>message.type==='job.extract'?{ok:true,requestId:message.requestId,fields,cleanupEvidence:{context:'Original listing context'}}:{ok:true}}};
+  Object.assign(globalThis,{document:win.document,window:win,chrome:browser});
+  t.after(()=>{win.dispatchEvent(new win.Event('pagehide'));Object.assign(globalThis,previous);win.happyDOM.abort();setQueueBackend(undefined);});
+  await browser.storage.local.set({analyzeJobsWithAI:true});
+  setQueueBackend((action,payload)=>app.request(action==='read'?'AI_APPLY_READ':'AI_APPLY_COMMIT',payload));
+  const queue=createJobQueue({channel:null});t.after(()=>queue.dispose());let captures=0,starts=0;
+  const generations={ready:Promise.resolve(),forJob:()=>null,captures:()=>[],subscribe:()=>()=>{},applyUrls:async()=>['https://employer.test/apply'],capture:async()=>{captures++;},start:async()=>{starts++;}};
+  const dialogs=[];
+  const studio=createStudio({queue,generations,openDialog:id=>dialogs.push(id),showStudio:()=>{},showChat:()=>{},moveTab:()=>{},openApplication:()=>{}});
+  await studio.ready;studio.updateTabs({count:1,index:1,tabId:7,url:sourceUrl,busy:false});
+  win.document.querySelector('#capture-current-job').click();
+  for(let i=0;i<100&&!queue.snapshot().requests.length&&!dialogs.length;i++)await new Promise(resolve=>setTimeout(resolve,5));
+  const record=queue.snapshot().requests[0];
+  assert.ok(record,`Job was not saved. Dialogs: ${dialogs.join(', ')}`);
+  assert.equal(record.capturePending,undefined);assert.equal(record.state,'queued');assert.equal(captures,0);assert.equal(starts,0);
+  assert.equal(record.input.job.url,sourceUrl.includes('hiring.cafe')?'https://employer.test/apply':sourceUrl);
+  assert.equal(record.input.job.cleanupEvidence.context,'Original listing context');
+  assert.equal(win.document.querySelector('#job-capture-progress').hidden,true);
+});

@@ -10,6 +10,8 @@ export async function checkExtension(directory = extensionRoot, { quiet = false 
   const files = await listFiles(directory);
   const names = new Set(files.map(file => path.relative(directory, file).split(path.sep).join('/')));
   const errors = [];
+  const retired = /^(?:background\.js|dashboard\.(?:html|js)|popup\.html|settings\.(?:html|js|css)|chunks\/.+|content-scripts\/(?:content|inline-dock)\.(?:js|css)|studio\/(?:inline-dock-(?:client|layout|service)|apply-dock-(?:view|markup)|dock-apply-api|local-resume-(?:client|service)|pdf-resume-parser|resume-text-parser|meeting-samples|application-samples|queue-samples|sample-documents|sample-data)\.js)$/;
+  for (const name of names) if (retired.test(name)) errors.push(`${name}: retired application code must not be packaged.`);
   let scripts = 0;
   let jsonFiles = 0;
 

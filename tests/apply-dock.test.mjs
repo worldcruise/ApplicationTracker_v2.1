@@ -4,30 +4,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { readFile } from 'node:fs/promises';
 import { Window } from 'happy-dom';
 import { applyFixture } from './helpers/apply-dock-fixture.mjs';
-import { mountApplyDock } from '../extension/studio/apply-dock-view.js';
 import { mountDockDashboard } from '../extension/studio/dock-dashboard-view.js';
-import { APPLY_DOCK_MARKUP } from '../extension/studio/apply-dock-markup.js';
 import { DOCK_APPLY_OPERATIONS } from '../extension/studio/dock-apply-service.js';
 import { DASHBOARD_OPERATIONS } from '../extension/studio/reference-dashboard-access.js';
 
 async function until(check){for(let i=0;i<80;i++){if(await check())return;await delay(10);}throw Error('Expected application state did not arrive.');}
-test('dock Apply lists only Ready jobs and binds a frozen resume to a real form',async t=>{
-  const app=await applyFixture(t),employer=app.employer();
-  await assert.rejects(app.request('DOCK_APPLY_START',{jobId:'missing',tabId:7}),/validated resume/);
-  const queued=await app.create('queued'),job=await app.ready(await app.create('ready'));
-  const initial=await app.request('DOCK_APPLY_STATE');assert.equal(initial.jobs.length,1);assert.equal(initial.jobs[0].id,job.id);assert.ok(!initial.jobs.some(item=>item.id===queued.id));
-  await assert.rejects(app.start(queued),/validated resume/);
-  await assert.rejects(app.request('DOCK_APPLY_IMPORT',{action:'parse',jobId:queued.id,fileName:'Resume.pdf',base64:btoa('PDF')}),/validated resume/);
-  const started=await app.start(job);assert.equal(started.run.jobId,job.id);assert.equal(started.run.tabId,7);
-  await app.settled();const state=await app.request('DOCK_APPLY_STATE');
-  assert.equal(state.run.phase,'questions');assert.equal(employer.page.document.querySelector('[name="firstName"]').value,'Jordan');assert.equal(employer.page.document.querySelector('[name="email"]').value,'jordan@example.test');assert.equal(employer.uploads(),1);
-  assert.deepEqual(app.rendered[0],{...job.resume.snapshot,workspaceId:`dock-apply:${job.id}:${job.resume.version}`});assert.equal(state.run.fields.length,5);assert.equal(state.run.fields.filter(field=>field.filled).length,3);
-  assert.ok(app.sent.every(item=>item.id===7&&item.options.documentId==='document-7'));
-  await assert.rejects(app.request('DOCK_APPLY_SELECT',{candidateId:'candidate-2'}),/cancel the current run/);
-  await app.action(state.run,'cancel');const switched=await app.request('DOCK_APPLY_SELECT',{candidateId:'candidate-2'});assert.equal(switched.jobs.length,0);assert.equal(switched.candidate.id,'candidate-2');
-  assert.equal(app.tabs.length,0);
-});
-
 test('Apply excludes stale resumes and removes a job when its status stops being Ready',async t=>{
   const app=await applyFixture(t),ready=await app.ready(await app.create('ready')),stale=await app.ready(await app.create('stale')),failed=await app.create('failed');
   await app.mutate('fail',failed);
@@ -37,29 +18,17 @@ test('Apply excludes stale resumes and removes a job when its status stops being
   assert.equal((await app.request('DOCK_APPLY_STATE')).jobs.length,0);
 });
 
-test('Import from Queue parses the saved PDF file rather than mapping queue JSON',async t=>{
-  const app=await applyFixture(t),job=await app.ready(await app.create());let parsed;
-  app.serviceDeps.readQueueFile=async()=>({resumeBase64:btoa('%PDF saved file'),fileName:'saved-resume.pdf'});
-  app.serviceDeps.parseResume=async file=>{parsed=file;return {skillsData:['Skill from the saved PDF']};};app.restart();
-  const result=await app.request('DOCK_APPLY_IMPORT',{action:'queue-file',jobId:job.id});assert.equal(result.fileName,'saved-resume.pdf');assert.deepEqual(parsed,{base64:btoa('%PDF saved file'),fileName:'saved-resume.pdf'});assert.ok(result.token);assert.deepEqual(result.changes.skills,['Skill from the saved PDF']);assert.equal(app.rendered.length,0);
-});
-
 test('dock answers fill real questions, remember only approved facts, and record a confirmed application once',async t=>{
   const app=await applyFixture(t),employer=app.employer(),job=await app.ready(await app.create());
   await app.start(job);await app.settled();let {run}=await app.request('DOCK_APPLY_STATE');
   const why=run.questions.find(field=>field.kind==='ai'),availability=run.questions.find(field=>field.kind==='fact');
-  let result=await app.action(run,'draft',{fieldKey:why.key});await app.settled();result=await app.request('DOCK_APPLY_STATE');assert.ok(result.run.drafts[why.key]);assert.equal(app.generated[0].profile.nameData.firstName,'Jordan');
+  let result;const reviewedAnswer='My reviewed answer';
   assert.equal(employer.page.document.querySelector('[name="why"]').value,'');
-  result=await app.action(run,'fill-answer',{fieldKey:why.key,answer:result.run.drafts[why.key]});
+  result=await app.action(run,'fill-answer',{fieldKey:why.key,answer:reviewedAnswer});
   result=await app.action(run,'fill-answer',{fieldKey:availability.key,answer:'Two weeks',remember:true});run=result.run;
   assert.equal(run.phase,'ready');assert.equal(employer.page.document.querySelector('[name="availability"]').value,'Two weeks');
   assert.ok((await app.storage.get('dock-approved-answers:v1:candidate-1'))['dock-approved-answers:v1:candidate-1']);
-  await app.action(run,'review');result=await app.action(run,'submit');assert.equal(result.run.phase,'submission-pending');assert.equal(employer.submits(),1);
-  await assert.rejects(app.action(run,'submit'),/rescan this application/);assert.equal(employer.submits(),1);
-  const before=app.browser.storage.local.values.appliedList.length;
-  result=await app.action(run,'confirm-submission');assert.equal(result.run.phase,'submitted');assert.ok(result.run.applicationId);assert.equal(app.browser.storage.local.values.appliedList.length,before+1);
-  await app.action(run,'confirm-submission');assert.equal(app.browser.storage.local.values.appliedList.length,before+1);
-  app.restart();assert.equal((await app.request('DOCK_APPLY_STATE')).run.phase,'submitted');
+  assert.equal(employer.submits(),0);
 });
 
 test('pause and cancel stop delayed form writes, and restarting the worker preserves an interrupted run',async t=>{
@@ -73,97 +42,116 @@ test('pause and cancel stop delayed form writes, and restarting the worker prese
   app.restart();assert.equal((await app.request('DOCK_APPLY_STATE')).run.phase,'cancelled');
 });
 
-test('resume import reviews changes, rejects a stale profile, and keeps SpeedyApply data fields',async t=>{
-  const app=await applyFixture(t);app.employer();const job=await app.ready(await app.create());
-  const parsed=await app.request('DOCK_APPLY_IMPORT',{action:'parse',jobId:job.id,fileName:'Resume.pdf',base64:btoa('%PDF resume')});assert.ok(parsed.summary.includes('1 skills'));
-  app.bumpProfile();await assert.rejects(app.request('DOCK_APPLY_IMPORT',{action:'apply',jobId:job.id,token:parsed.token}),/profile or job changed/);
-  const next=await app.request('DOCK_APPLY_IMPORT',{action:'parse',jobId:job.id,fileName:'Resume.pdf',base64:btoa('%PDF resume')});
-  await app.request('DOCK_APPLY_IMPORT',{action:'apply',jobId:job.id,token:next.token});
-  const candidate=await app.deps.profiles.get('candidate-1');assert.deepEqual(candidate.profile.skillsData,['Parsed skill']);assert.equal(candidate.profile.contactData.email,'jordan@example.test');assert.equal(candidate.profile.profileName,'Profile One');
-});
-
-test('recording refuses a profile changed after starting, and stale jobs cannot start',async t=>{
+test('recording refuses a profile changed after starting; changed jobs can fill facts without attaching stale documents',async t=>{
   const app=await applyFixture(t);app.employer();const job=await app.ready(await app.create());await app.start(job);await app.settled();const {run}=await app.request('DOCK_APPLY_STATE');
   app.bumpProfile();await assert.rejects(app.action(run,'confirm-submission'),/profile or prepared resume changed/);assert.equal(app.browser.storage.local.values.appliedList.length,1);
-  await app.action(run,'cancel');await app.mutate('update',job,{url:job.url,description:'Different input',notes:'',conversationUrl:''});await assert.rejects(app.start(job),/validated resume/);
+  await app.action(run,'cancel');await app.mutate('update',job,{url:job.url,description:'Different input',notes:'',conversationUrl:''});
+  const page=app.employer();await app.start(job);const next=await app.settled();assert.notEqual(next.phase,'error');
+  assert.equal(page.page.document.querySelector('[name=firstName]').value,'Jordan');assert.equal(page.uploads(),0);assert.equal(app.browser.storage.local.values.appliedList.length,1);
 });
 
-test('Apply UI imports no demo runtime, preserves question drafts and returns to the dock',async t=>{
-  const app=await applyFixture(t);app.employer();const job=await app.ready(await app.create());
-  const page=new Window(),host=page.document.createElement('div');page.document.body.append(host);let dashboard=0,queue=0;
-  app.browser.runtime.sendMessage=async message=>{try{return{ok:true,result:await app.request(message.operation,message.payload)};}catch(error){return{ok:false,error:{message:error.message}};}};
-  const view=mountApplyDock(host,{browser:app.browser,privateStorage:app.storage,onDashboard:()=>dashboard++,onQueue:()=>queue++});t.after(()=>{view.close();return page.happyDOM.abort();});await view.ready;
-  const $=selector=>host.querySelector(selector),click=async selector=>{$(selector).click();await until(()=>view.root.getAttribute('aria-busy')==='false');};
-  assert.equal($('#aj-setup').hidden,false);assert.equal($('#aj-profile').textContent,'Test Candidate');assert.equal($('#aj-prepared-company').textContent,job.company);assert.ok(!APPLY_DOCK_MARKUP.includes('<script'));assert.ok(!APPLY_DOCK_MARKUP.includes('Morgan'));assert.ok(!APPLY_DOCK_MARKUP.includes('Demo'));
-  assert.equal($('#aj-tailor').checked,true);assert.equal($('#aj-upload').hidden,false);
-  assert.equal($('#aj-update-profile').textContent,'Update Test Candidate’s profile');
-  $('#aj-target-tab').value='7';$('#aj-target-tab').dispatchEvent(new page.Event('input',{bubbles:true}));
-  await click('#aj-start');await app.settled();await view.show();assert.equal($('#aj-autofill').hidden,false);assert.equal($('#aj-profile').tagName,'SPAN');
-  $('#aj-answer').value='Draft answer retained';$('#aj-answer').dispatchEvent(new page.Event('input',{bubbles:true}));await view.show();assert.equal($('#aj-answer').value,'Draft answer retained');
-  await click('[data-step="setup"]');assert.equal($('#aj-setup').hidden,false);assert.equal($('#aj-header-state').textContent,'Draft');assert.equal($('#aj-start').disabled,false);
-  assert.ok($('#aj-target-tab').closest('.aj-option-list'));assert.equal($('#aj-rescan').closest('#aj-autofill').id,'aj-autofill');
-  await click('[data-action="dashboard"]');assert.equal(dashboard,1);await click('[data-action="job-details"]');assert.equal(queue,1);
-  assert.equal((await readFile('extension/options.html','utf8')).includes('apply-dock.css'),false);
-  assert.ok((await readFile('extension/dashboard.html','utf8')).includes('href="apply-dock.css"'),'The actual dock entry point loads the imported styles');
-  assert.ok(DOCK_APPLY_OPERATIONS.every(operation=>DASHBOARD_OPERATIONS.has(operation)));
+test('autofill accepts the offscreen renderer response envelope',async t=>{
+  const app=await applyFixture(t),employer=app.employer();
+  const renderer=app.serviceDeps.renderSnapshot;
+  app.serviceDeps.renderSnapshot=async snapshot=>({stale:false,result:await renderer(snapshot)});app.restart();
+  const job=await app.ready(await app.create());await app.start(job);const run=await app.settled();
+  assert.notEqual(run.phase,'error');assert.equal(employer.page.document.querySelector('input[name=firstName]').value,'Jordan');assert.equal(employer.uploads(),1);
 });
 
-test('tailoring defaults on for saved setups and preserves an explicit off choice when reopening',async t=>{
-  const app=await applyFixture(t),page=new Window(),host=page.document.createElement('div');page.document.body.append(host);
-  app.browser.runtime.sendMessage=async message=>({ok:true,result:await app.request(message.operation,message.payload)});
-  await app.storage.set({'dock-apply-ui:v1:41':{tailor:false}});
-  let view=mountApplyDock(host,{browser:app.browser,privateStorage:app.storage});await view.ready;
-  assert.equal(host.querySelector('#aj-tailor').checked,true);assert.equal(host.querySelector('#aj-upload').hidden,false);
-  const toggle=host.querySelector('#aj-tailor');toggle.checked=false;toggle.dispatchEvent(new page.Event('input',{bubbles:true}));
-  await until(async()=>!!(await app.storage.get('dock-apply-ui:v1:41'))['dock-apply-ui:v1:41']?.tailorPreferenceSet);
-  view.close();view=mountApplyDock(host,{browser:app.browser,privateStorage:app.storage});await view.ready;
-  assert.equal(host.querySelector('#aj-tailor').checked,false);assert.equal(host.querySelector('#aj-upload').hidden,true);
-  view.close();await page.happyDOM.abort();
+test('Dashboard Apply to Job opens the template in place and preserves Dashboard navigation',async t=>{
+  const app=await applyFixture(t);app.employer();
+  const page=new Window({settings:{disableIframePageLoading:true}}),host=page.document.createElement('div');page.document.body.append(host);
+  app.browser.runtime.sendMessage=async message=>({ok:true,result:message.operation==='DASHBOARD_STATE'?{candidate:await app.deps.profiles.bootstrap(),candidates:[]}:await app.recordsRequest(message.operation,message.payload)});
+  const dock=mountDockDashboard(host,{browser:app.browser,privateStorage:app.storage,applyAccess:'dock-access'});t.after(()=>{dock.close();return page.happyDOM.abort();});
+  await delay(20);host.querySelector('[data-action="Apply to Job"]').click();
+  await until(()=>host.querySelector('.dock-ai-apply-frame')?.src.includes('windowId='));
+  const frame=host.querySelector('.dock-ai-apply-frame'),url=new URL(frame.src);
+  page.dispatchEvent(new page.MessageEvent('message',{source:frame.contentWindow,origin:'chrome-extension://dock-test',data:{type:'ai-apply.ready',nonce:url.searchParams.get('nonce')}}));
+  await delay(5);
+  assert.equal(url.pathname,'/ai-apply/index.html');assert.equal(url.searchParams.get('access'),'dock-access');
+  assert.equal(host.querySelector('.rd-main').hidden,true);assert.equal(host.querySelector('#apply-ready-queue-design'),null);assert.equal(app.tabs.length,0);
+  host.querySelector('.dock-ai-apply .dock-workspace-header button').click();assert.equal(host.querySelector('.rd-main').hidden,false);
+  await dock.showApplications('queue');assert.equal(host.querySelectorAll('.dock-ai-apply-frame').length,1);assert.equal(host.querySelector('#at-reference-dock').dataset.dockView,'apply');
 });
 
-test('Apply Dashboard back navigation works during a pending operation and a failed setup save',async t=>{
-  const app=await applyFixture(t);await app.ready(await app.create());
-  const page=new Window(),host=page.document.createElement('div');page.document.body.append(host);let dashboard=0,finishPreview;
-  app.browser.runtime.sendMessage=async message=>{if(message.operation==='DOCK_APPLY_PDF')return new Promise(resolve=>{finishPreview=resolve;});return{ok:true,result:await app.request(message.operation,message.payload)};};
-  const view=mountApplyDock(host,{browser:app.browser,privateStorage:app.storage,onDashboard:()=>dashboard++});t.after(()=>{view.close();return page.happyDOM.abort();});await view.ready;
-  host.querySelector('[data-action="preview-prepared-job"]').click();await until(()=>finishPreview);
-  app.storage.set=async()=>{throw Error('Storage unavailable');};
-  host.querySelector('[data-action="dashboard"]').click();assert.equal(dashboard,1,'Back navigation works while Apply is busy');
-  await delay(10);assert.match(host.querySelector('#aj-feedback').textContent,/Unsaved setup remains/);
-  finishPreview({ok:false,error:{message:'Preview cancelled'}});await delay(10);
+test('Fill all respects selected fields and manual answers while attaching both saved documents',async t=>{
+ const app=await applyFixture(t),employer=app.employer('<form><label>First name *<input name="firstName"></label><label>Email<input type="email" name="email" required></label><label>Resume<input type="file" name="resume"></label><label>Cover letter file<input type="file" name="letter"></label><label>Cover letter<textarea name="letter-text"></textarea></label><label>Why this role?<textarea name="why" required></textarea></label></form>');
+ const job=await app.ready(await app.create());app.serviceDeps.renderCoverLetter=async()=>({text:'My saved letter',resumeBase64:btoa('%PDF cover letter'),fileName:'Cover letter.pdf'});app.restart();
+ const inspected=await app.request('DOCK_APPLY_INSPECT'),why=inspected.fields.find(field=>field.label==='Why this role?');
+ await app.request('DOCK_APPLY_START',{jobId:job.id,tabId:7,fieldKeys:[why.key],answers:{[why.key]:'My reviewed answer'}});await app.settled();
+ assert.equal(employer.page.document.querySelector('[name="firstName"]').value,'');assert.equal(employer.page.document.querySelector('[name="email"]').value,'');assert.equal(employer.page.document.querySelector('[name="why"]').value,'My reviewed answer');
+ assert.equal(employer.page.document.querySelector('[name="resume"]').files.length,1);assert.equal(employer.page.document.querySelector('[name="letter"]').files[0].name,'Cover letter.pdf');assert.equal(employer.page.document.querySelector('[name="letter-text"]').value,'My saved letter');assert.equal(employer.submits(),0);
 });
 
-test('Dashboard Apply to Job and a Ready queue card open the same dock view without creating web tabs',async t=>{
-  const app=await applyFixture(t);app.employer();const job=await app.ready(await app.create());
-  const page=new Window(),host=page.document.createElement('div');page.document.body.append(host);
-  app.browser.runtime.sendMessage=async message=>{try{return{ok:true,result:message.operation==='DASHBOARD_STATE'?{candidate:await app.deps.profiles.bootstrap(),candidates:await app.deps.profiles.list()}:message.operation.startsWith('DOCK_RECORDS_')?await app.recordsRequest(message.operation,message.payload):await app.request(message.operation,message.payload)};}catch(error){return{ok:false,error:{message:error.message}};}};
-  const dock=mountDockDashboard(host,{browser:app.browser,privateStorage:app.storage});t.after(()=>{dock.close();return page.happyDOM.abort();});
-  await delay(20);host.querySelector('[data-action="Apply to Job"]').click();await until(()=>host.querySelector('#aj-profile')?.textContent==='Test Candidate');
-  assert.equal(host.querySelector('.rd-main').hidden,true);assert.equal(host.querySelector('#apply-ready-queue-design').hidden,false);assert.equal(app.tabs.length,0);
-  host.querySelector('#apply-ready-queue-design [data-action="job-details"]').click();await until(()=>host.querySelector(`#jr-detail-actions [data-record="${job.id}"][data-command="apply"]`));
-  assert.equal(host.querySelector('#apply-ready-queue-design').hidden,true);assert.equal(host.querySelector('#job-records-design').hidden,false);
-  await until(()=>host.querySelector('#jr-detail-company').textContent===job.company);
-  host.querySelector(`#jr-detail-actions [data-record="${job.id}"][data-command="apply"]`).click();await until(()=>!host.querySelector('#apply-ready-queue-design').hidden);
-  assert.equal(host.querySelector('#aj-prepared-title').textContent,job.role);assert.equal(host.querySelector('#job-records-design').hidden,true);
-  host.querySelector('#apply-ready-queue-design [data-action="dashboard"]').click();await until(()=>!host.querySelector('.rd-main').hidden);assert.equal(app.tabs.length,0);
+test('bulk refill accepts answers to questions discovered after the initial autofill run',async t=>{
+ const app=await applyFixture(t),employer=app.employer(),job=await app.ready(await app.create());await app.start(job);await app.settled();const {run}=await app.request('DOCK_APPLY_STATE');
+ const label=employer.page.document.createElement('label');label.textContent='Why this company now?';const input=employer.page.document.createElement('textarea');input.required=true;label.append(input);employer.page.document.querySelector('form').append(label);
+ const inspected=await app.request('DOCK_APPLY_INSPECT'),question=inspected.fields.find(field=>field.label==='Why this company now?');
+ await app.action(run,'rescan',{fieldKeys:[question.key],answers:{[question.key]:'My newly reviewed answer'}});await app.settled();assert.equal(input.value,'My newly reviewed answer');
 });
 
-test('concurrent submission clicks and interrupted recording cannot duplicate an application',async t=>{
-  const app=await applyFixture(t),employer=app.employer('<form><label>First name<input name="firstName" required></label><button type="submit">Submit application</button></form>');
-  const job=await app.ready(await app.create());await app.start(job);await app.settled();let {run}=await app.request('DOCK_APPLY_STATE');
-  const clicks=await Promise.allSettled([app.action(run,'submit'),app.action(run,'submit')]);assert.equal(clicks.filter(result=>result.status==='fulfilled').length,1);assert.equal(employer.submits(),1);
-  const set=app.storage.set.bind(app.storage);let interrupted=false;
-  app.storage.set=async input=>{if(!interrupted&&Object.entries(input).some(([key,value])=>key.startsWith('dock-apply-run:v1:')&&value.phase==='submitted')){interrupted=true;throw Error('Interrupted final run write');}return set(input);};
-  await assert.rejects(app.action(run,'confirm-submission'),/Interrupted final run write/);assert.equal(app.browser.storage.local.values.appliedList.length,2);
-  app.storage.set=set;app.restart();run=(await app.request('DOCK_APPLY_STATE')).run;
-  const result=await app.action(run,'confirm-submission');assert.equal(result.run.phase,'submitted');assert.equal(app.browser.storage.local.values.appliedList.length,2);
+test('profile-only autofill works before documents are generated and saves only a confirmed submission',async t=>{
+ const app=await applyFixture(t),employer=app.employer(),job=await app.create();
+ await app.start(job);let run=await app.settled();
+ assert.equal(employer.page.document.querySelector('[name=firstName]').value,'Jordan');assert.equal(employer.page.document.querySelector('[name=email]').value,'jordan@example.test');
+ assert.equal(employer.uploads(),0);assert.equal(app.rendered.length,0);assert.equal(app.browser.storage.local.values.appliedList.length,1);
+ const result=await app.action(run,'confirm-submission');assert.equal(result.run.phase,'submitted');assert.ok(result.run.applicationId);
+ assert.equal(app.browser.storage.local.values.appliedList.length,2);
+ const records=await app.recordsRequest('DOCK_RECORDS_STATE');assert.equal(records.jobs.length,0);assert.equal(records.applications.find(item=>item.id===result.run.applicationId).resume,null);
+ await app.action(result.run,'confirm-submission');assert.equal(app.browser.storage.local.values.appliedList.length,2);assert.equal(employer.submits(),0);
 });
 
-test('an obsolete AI response cannot overwrite a paused and resumed run',async t=>{
-  const app=await applyFixture(t),employer=app.employer(),job=await app.ready(await app.create());let release;
-  app.serviceDeps.generateAnswer=()=>new Promise(resolve=>{release=resolve;});app.restart();
-  await app.start(job);await app.settled();let {run}=await app.request('DOCK_APPLY_STATE');const why=run.questions.find(field=>field.kind==='ai');
-  const result=await app.action(run,'draft',{fieldKey:why.key});assert.equal(result.run.phase,'drafting');await until(()=>release);
-  await app.action(run,'pause');await app.action(run,'resume');await app.settled();release('Obsolete AI draft');await delay(20);
-  run=(await app.request('DOCK_APPLY_STATE')).run;assert.equal(run.drafts[why.key],undefined);assert.equal(employer.page.document.querySelector('[name="why"]').value,'');
+test('slow or failed PDF rendering never blocks profile facts and a retry can still attach documents',async t=>{
+ const app=await applyFixture(t),employer=app.employer(),job=await app.ready(await app.create());
+ let release;app.serviceDeps.renderSnapshot=()=>new Promise((resolve,reject)=>{release=()=>reject(Error('Renderer unavailable'));});app.restart();
+ await app.start(job);await until(()=>release);assert.equal(employer.page.document.querySelector('[name=firstName]').value,'Jordan');
+ release();const run=await app.settled();assert.equal(run.phase,'questions');assert.match(run.warnings[0],/Resume could not be attached/);assert.equal(employer.uploads(),0);
+ app.serviceDeps.renderSnapshot=async()=>({base64:btoa('%PDF retry')});app.restart();await app.action(run,'rescan');const retried=await app.settled();assert.notEqual(retried.phase,'error');assert.equal(employer.uploads(),1);
+});
+
+test('autofill skips PDF rendering on text-only forms and can use the uploaded original resume',async t=>{
+ const app=await applyFixture(t),page=app.employer('<form><label>First name<input name="firstName"></label></form>'),job=await app.ready(await app.create());
+ await app.start(job);let run=await app.settled();assert.equal(app.rendered.length,0);assert.equal(page.page.document.querySelector('input').value,'Jordan');await app.action(run,'cancel');
+ const original=app.profiles.get('candidate-1');original.profile.resumeData={resumeBase64:btoa('%PDF original'),fileName:'Original.pdf'};
+ const employer=app.employer();const queued=await app.create('original');await app.start(queued);run=await app.settled();assert.equal(employer.page.document.querySelector('[name=resume]').files[0].name,'Original.pdf');assert.equal(app.rendered.length,0);assert.notEqual(run.phase,'error');
+});
+
+test('inspection finds the selected employer tab when the active tab is an extension page',async t=>{
+ const app=await applyFixture(t);app.employer();const job=await app.create();app.openTabs.get(7).active=false;
+ const inspected=await app.request('DOCK_APPLY_INSPECT',{jobId:job.id});
+ // The form URL follows the saved listing after opening Apply.
+ assert.equal(inspected.tabId,null);
+ app.openTabs.get(7).url=job.url;
+ const matched=await app.request('DOCK_APPLY_INSPECT',{jobId:job.id});assert.equal(matched.tabId,7);assert.ok(matched.fields.find(field=>field.label==='Email').canAutofill);
+});
+
+test('profile autofill fills the current page without any queued job and never manufactures an application record',async t=>{
+ const app=await applyFixture(t),page=app.employer();const before=await app.recordsRequest('DOCK_RECORDS_STATE');assert.equal(before.jobs.length,0);
+ await app.request('DOCK_APPLY_START',{profileOnly:true,tabId:7});let run=await app.settled();
+ assert.equal(run.profileOnly,true);assert.equal(run.jobId,null);assert.equal(run.options.record,false);assert.equal(page.page.document.querySelector('[name=firstName]').value,'Jordan');assert.equal(page.page.document.querySelector('[name=email]').value,'jordan@example.test');
+ assert.equal(page.page.document.querySelector('[name=why]').value,'');assert.equal(page.submits(),0);
+ app.profiles.get('candidate-1').profile.nameData.firstName='Updated';page.page.document.querySelector('[name=firstName]').value='';await app.action(run,'rescan');run=await app.settled();assert.equal(page.page.document.querySelector('[name=firstName]').value,'Updated');
+ const confirmed=await app.action(run,'confirm-submission');assert.equal(confirmed.run.phase,'submitted');assert.equal(app.browser.storage.local.values.appliedList.length,1);assert.equal((await app.recordsRequest('DOCK_RECORDS_STATE')).jobs.length,0);
+});
+
+test('switching to another application cancels delayed writes and fills the selected page in one request',async t=>{
+ const app=await applyFixture(t),first=await app.ready(await app.create('jobs/first')),oldPage=app.employer(undefined,first.url),send=app.browser.tabs.sendMessage;
+ let release,waiting=false;app.browser.tabs.sendMessage=async(...args)=>{if(args[0]===7&&args[1].action==='fill'&&!waiting){waiting=true;await new Promise(resolve=>{release=resolve;});}return send(...args);};
+ const {run:old}=await app.start(first);await until(()=>waiting);t.after(()=>release?.());
+ const second=await app.create('jobs/second'),newPage=app.employer(undefined,second.url,8);
+ await app.request('DOCK_APPLY_START',{jobId:second.id,tabId:8,replaceRunId:old.id});const next=await app.settled();assert.notEqual(next.id,old.id);assert.equal(next.tabId,8);assert.equal(newPage.page.document.querySelector('[name=firstName]').value,'Jordan');
+ release();await delay(25);assert.equal(oldPage.page.document.querySelector('[name=firstName]').value,'',JSON.stringify(app.sent.map(({id,message})=>({id,action:message.action,runId:message.runId}))));assert.equal((await app.request('DOCK_APPLY_STATE')).run.id,next.id);assert.equal(oldPage.submits(),0);assert.equal(newPage.submits(),0);
+});
+
+test('a stale switch or invalid new target never cancels the previous run',async t=>{
+ const app=await applyFixture(t),first=await app.ready(await app.create('jobs/first'));app.employer(undefined,first.url);await app.start(first);const old=await app.settled();
+ const second=await app.create('jobs/second');app.employer(undefined,second.url,8);
+ await assert.rejects(app.request('DOCK_APPLY_START',{jobId:second.id,tabId:8,replaceRunId:'obsolete'}),/active autofill changed/);
+ await assert.rejects(app.request('DOCK_APPLY_START',{jobId:second.id,tabId:7,replaceRunId:old.id}),/another job/);
+ assert.equal((await app.request('DOCK_APPLY_STATE')).run.id,old.id);assert.ok(!app.sent.some(({message})=>message.action==='cancel'));
+});
+
+test('rejected document types report upload warnings while profile fields still fill',async t=>{
+ const app=await applyFixture(t),page=app.employer('<form><label>Email<input id="email" required></label><label>Resume<input type="file" accept=".docx" required></label></form>'),job=await app.ready(await app.create());
+ await app.start(job);const run=await app.settled();assert.equal(page.page.document.querySelector('#email').value,'jordan@example.test');assert.equal(page.uploads(),0);assert.equal(run.phase,'questions');assert.match(run.warnings.join(' '),/accepts \.docx/);assert.ok(run.fields.find(field=>field.type==='file').uploadError);
 });

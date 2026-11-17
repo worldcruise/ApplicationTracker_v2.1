@@ -22,7 +22,7 @@ async function rebuild() {
 try {
   await buildExtension();
   const changed = (event, filename) => {
-    if (['studio/prompt-settings.js','content-scripts/inline-dock.js'].includes(String(filename).replaceAll('\\', '/'))) return;
+    if (['studio/prompt-settings.js','studio/prompt-repository.js','ai-apply/src/build-info.js','web-app.js','vendor/react.js','content-scripts/dock-apply.js','content-scripts/apply-network.js'].includes(String(filename).replaceAll('\\', '/'))) return;
     clearTimeout(timer);
     timer = setTimeout(() => { rebuild(); }, 200);
   };

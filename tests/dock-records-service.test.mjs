@@ -2,14 +2,70 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { dockFixture } from './helpers/dock-records-fixture.mjs';
 
-test('manual applications validate required fields and retain resume and cover-letter edits',async t=>{
+test('application createdAt is normalized for legacy records and remains fixed after updates and queue submission',async t=>{
+  const f=await dockFixture(t),legacy=(await f.request('DOCK_RECORDS_STATE')).applications[0];
+  assert.equal(legacy.createdAt,new Date(f.browser.storage.local.values.appliedList[0].date).toISOString());
+  const created=await f.mutate('create-application',null,{company:'Dates',role:'Engineer'}),record=created.applications.find(row=>row.id===created.selectedId);
+  assert.equal(record.createdAt,f.deps.now());assert.equal(f.browser.storage.local.values.appliedList[0].createdAt,record.createdAt);assert.equal('submittedAt' in record,false);
+  f.deps.now=()=> '2026-11-10T19:00:00.000Z';f.restart();
+  const updated=await f.mutate('update',record,{status:'screen'}),next=updated.applications.find(row=>row.id===record.id);
+  assert.equal(next.createdAt,record.createdAt);assert.equal(next.updatedAt,f.deps.now());
+  const job=await f.ready(await f.create()),applied=await f.mutate('apply',job),submitted=applied.applications.find(row=>row.id===applied.selectedId);
+  assert.equal(submitted.createdAt,f.deps.now());assert.equal('submittedAt' in submitted,false);
+});
+
+test('selected queue deletion rejects every stale batch before removing anything and retries only once',async t=>{
+  const f=await dockFixture(t),first=await f.create('first'),second=await f.create('second'),third=await f.create('third');
+  const payload={action:'delete-selected',type:'queue',records:[{id:first.id,revision:first.revision},{id:second.id,revision:0}],mutationId:crypto.randomUUID()};
+  await assert.rejects(f.request('DOCK_RECORDS_MUTATE',payload),{code:'CONFLICT'});assert.equal((await f.request('DOCK_RECORDS_STATE')).jobs.length,3);
+  payload.records[1].revision=second.revision;
+  const result=await f.request('DOCK_RECORDS_MUTATE',payload);assert.deepEqual(result.jobs.map(row=>row.id),[third.id]);assert.equal(result.applications.length,1);
+  f.restart();assert.deepEqual((await f.request('DOCK_RECORDS_MUTATE',payload)).jobs.map(row=>row.id),[third.id]);
+});
+
+test('selected application deletion preserves unchecked applications, queue jobs without remote side effects',async t=>{
+  const f=await dockFixture(t),removed=[];f.deps.deleteApplication=async id=>removed.push(id);f.restart();
+  const create=await f.mutate('create-application',null,{company:'Batch',role:'Engineer'}),added=create.applications.find(row=>row.id===create.selectedId),job=await f.create();
+  const payload={action:'delete-selected',type:'applications',records:[{id:added.id,revision:'stale'}],mutationId:crypto.randomUUID()};
+  await assert.rejects(f.request('DOCK_RECORDS_MUTATE',payload),{code:'CONFLICT'});assert.equal((await f.request('DOCK_RECORDS_STATE')).applications.length,2);
+  payload.records[0].revision=added.revision;
+  const result=await f.request('DOCK_RECORDS_MUTATE',payload);assert.equal(result.applications.length,1);assert.equal(result.applications[0].company,'Existing company');assert.equal(result.jobs[0].id,job.id);assert.equal(removed.length,0);
+  f.restart();await f.request('DOCK_RECORDS_MUTATE',payload);assert.equal(removed.length,0);
+});
+
+test('manual applications validate required fields and cannot add or change submitted documents',async t=>{
   const f=await dockFixture(t);
   for(const fields of [{company:'',role:'Engineer'},{company:'Company',role:''}])await assert.rejects(f.mutate('create-application',null,fields),{code:'INVALID_REQUEST'});
   const created=await f.mutate('create-application',null,{company:'Company',role:'Engineer'}),app=created.applications.find(item=>item.id===created.selectedId);
   assert.equal(created.jobs.length,0);assert.equal(app.company,'Company');assert.equal(app.status,'applied');
   const cvJsonRaw=JSON.stringify({company:'Company',title:'Engineer',summary:'Factual summary',skills:[],experience:[],education:[]});
-  const result=await f.mutate('update',app,{status:'interview',notes:'',cvJsonRaw,coverLetterRaw:'My cover letter',coverLetterEnabled:true});
-  const saved=result.applications.find(item=>item.id===app.id);assert.equal(saved.resume.cvJsonRaw,cvJsonRaw);assert.equal(saved.coverLetterRaw,'My cover letter');assert.equal(saved.coverLetterEnabled,true);assert.equal(saved.status,'interview');
+  await assert.rejects(f.mutate('update',app,{status:'interview',cvJsonRaw,coverLetterRaw:'My cover letter',coverLetterEnabled:true}),{code:'READ_ONLY_DOCUMENTS'});
+  const result=await f.mutate('update',app,{status:'interview',notes:''});
+  const saved=result.applications.find(item=>item.id===app.id);assert.equal(saved.resume,null);assert.equal(saved.coverLetterRaw,'');assert.equal(saved.status,'interview');
+});
+
+test('submission freezes queue documents and salary while application status stays editable',async t=>{
+  const f=await dockFixture(t),ready=await f.ready(await f.create()),prepared=await f.mutate('update',ready,{...ready,cvJsonRaw:ready.resume.cvJsonRaw,coverLetterRaw:'Final submitted letter',coverLetterEnabled:true,salary:'$120,000 / year'});
+  const job=prepared.jobs[0],applied=await f.mutate('apply',job),app=applied.applications.find(row=>row.id===applied.selectedId),before=structuredClone(app.resume),draft=structuredClone(f.draft);
+  assert.equal(app.salary,'$120,000 / year');assert.equal(app.coverLetterRaw,'Final submitted letter');
+  for(const fields of [{cvJsonRaw:''},{coverLetterRaw:'Changed'},{coverLetterEnabled:false},{resume:null}])await assert.rejects(f.mutate('update',app,{status:'screen',...fields}),{code:'READ_ONLY_DOCUMENTS'});
+  await assert.rejects(f.request('DOCK_RECORDS_OPEN_RESUME',{type:'applications',id:app.id,expectedRevision:app.revision,windowId:41}),{code:'READ_ONLY_DOCUMENTS'});
+  const updated=await f.mutate('update',app,{status:'screen'});assert.deepEqual(updated.applications.find(row=>row.id===app.id).resume,before);assert.deepEqual(f.draft,draft);
+  f.restart();assert.deepEqual((await f.request('DOCK_RECORDS_STATE')).applications.find(row=>row.id===app.id).resume,before);
+  await assert.rejects(f.mutate('update-resume',job,{cvJsonRaw:''}),{code:'CONFLICT'});
+});
+
+test('application deletion checks revisions, stays local and can be undone after a restart',async t=>{
+  const f=await dockFixture(t),removed=[];f.deps.deleteApplication=async id=>removed.push(id);f.restart();
+  const created=await f.mutate('create-application',null,{company:'Delete test',role:'Engineer'}),record=created.applications.find(row=>row.id===created.selectedId);
+  const updated=await f.mutate('update',record,{status:'screen',salary:'$100k',notes:'Keep my notes'}),current=updated.applications.find(row=>row.id===record.id);
+  await assert.rejects(f.mutate('delete',record),{code:'CONFLICT'});
+  const original=structuredClone(f.browser.storage.local.values.appliedList),payload={action:'delete',type:current.type,id:current.id,expectedRevision:current.revision,mutationId:crypto.randomUUID()};
+  const deleted=await f.request('DOCK_RECORDS_MUTATE',payload);assert.equal(deleted.applications.length,1);assert.equal(deleted.deletedRecord.id,current.id);assert.deepEqual(removed,[]);
+  f.restart();assert.deepEqual((await f.request('DOCK_RECORDS_MUTATE',payload)).deletedRecord,deleted.deletedRecord);assert.equal(removed.length,0);
+  const restored=await f.mutate('restore',deleted.deletedRecord),row=restored.applications.find(app=>app.id===current.id);
+  assert.equal(row.status,'screen');assert.equal(row.notes,'Keep my notes');assert.equal(row.salary,'$100k');assert.deepEqual(f.browser.storage.local.values.appliedList,original);
+  await assert.rejects(f.mutate('restore',deleted.deletedRecord),{code:'CONFLICT'});
 });
 
 test('clearing the queue refuses stale data and preserves other candidates and applications',async t=>{
@@ -29,7 +85,7 @@ test('dock queue persists, rejects duplicates and keeps canonical application fi
   assert.equal(state.jobs[0].promptSnapshot.title,'Factual prompt');assert.equal(state.applications[0].role,'Existing role');
   await assert.rejects(f.create(),{code:'DUPLICATE_JOB'});
   const app=state.applications[0];await f.mutate('update',app,{notes:'Follow up tomorrow',conversationUrl:'',status:'interview'});
-  assert.equal(f.browser.storage.local.values.appliedList[0].extra,'preserved');assert.equal(f.browser.storage.local.values.appliedList[0].status,'interview');assert.equal(f.sync.length,1);
+  assert.equal(f.browser.storage.local.values.appliedList[0].extra,'preserved');assert.equal(f.browser.storage.local.values.appliedList[0].status,'interview');assert.equal(f.sync.length,0);
   await assert.rejects(f.mutate('update',app,{notes:'Stale note',conversationUrl:'',status:'offer'}),{code:'CONFLICT'});
   f.restart();assert.equal((await f.request('DOCK_RECORDS_STATE')).applications[0].notes,'Follow up tomorrow');
   f.browser.storage.local.values.appliedList[0].jobTitle='Renamed on the web page';

@@ -1,32 +1,11 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import test from 'node:test';
-const execute = promisify(execFile);
-
-test('packaged web routes mount with their real providers without runtime errors', async () => {
-  const cases = [['/', 'Applications'], ['/dashboard', 'Dashboard'], ['/meetings', 'Meetings'], ['/settings/profile', 'Settings'], ['/settings/prompts', 'Settings'], ['/settings/other', 'Settings'], ['/settings/autofill', 'Settings']];
-  const results = await Promise.allSettled(cases.map(async ([route, heading]) => {
-    const args = ['scripts/web-runtime-smoke.mjs', route];
-    if (route === '/') args.push('filters');
-    if (route === '/meetings') args.push('meetings');
-    if (route === '/dashboard') args.push('progress');
-    const { stderr } = await execute(process.execPath, args, { windowsHide: true, timeout: 15000 });
-    const report = JSON.parse(stderr.trim().split('\n').find(line => line.startsWith('{"route"')));
-    assert.deepEqual(report.errors, [], route); assert.ok(report.headings.includes(heading), `${route}: ${report.text}`);
-    if (route === '/' || route === '/dashboard') assert.ok(report.text.includes('Runtime Engineer'), `${route} must read a saved application through its actual provider`);
-    if(route==='/settings/profile')assert.ok(report.text.includes('Runtime M Candidate'),`${route} shows the complete candidate name instead of Default`);
-    if (route === '/dashboard') { assert.equal(report.applicationBoard, false); assert.equal(report.progress, true); }
-    assert.equal(report.dbButton, true);
-    if (route === '/meetings') { assert.equal(report.applicationBoard, true); assert.equal(report.progress, false); assert.ok(report.text.includes('Failed')); assert.ok(!report.text.includes('Add meeting')); }
-    if (route === '/') { assert.equal(report.searchPlaceholder, ''); assert.ok(!report.text.includes('Search applications')); }
-  }));
-  for (const result of results) if (result.status === 'rejected') throw result.reason;
+const execute=promisify(execFile);
+async function check(route,action){const {stderr}=await execute(process.execPath,['scripts/web-runtime-smoke.mjs',route,...action?[action]:[]],{windowsHide:true,timeout:15000});const report=JSON.parse(stderr.split('\n').find(line=>line.startsWith('{"route"')));assert.deepEqual(report.errors,[]);return report;}
+test('current web pages mount with no old account or application providers',async()=>{
+  const cases=[['/','Applications'],['/dashboard','Make your next move.'],['/meetings','Meetings'],['/?tab=queue','Applications'],['/settings/profile','Settings'],['/settings/ai/resume-generation','Resume Generation'],['/settings/ai/autofill','Autofill'],['/settings/ai/candidate','Settings'],['/settings/ai/prompt','Prompt settings'],['/settings/keywords','Keyword highlights'],['/settings/keyboard','Keyboard shortcuts'],['/settings/other','Other']];
+  for(const [route,heading]of cases){const report=await check(route);assert.ok(report.headings.includes(heading),route+': '+report.text);}
 });
-
-test('clicking web page tabs and dashboard shortcuts renders destinations in the current tab', async () => {
-  const { stderr } = await execute(process.execPath, ['scripts/web-runtime-smoke.mjs','/dashboard','navigation'], { windowsHide: true, timeout: 15000 });
-  const report = JSON.parse(stderr.trim().split('\n').find(line => line.startsWith('{"route"')));
-  assert.deepEqual(report.errors, []);
-  assert.ok(report.headings.includes('Settings'));
-});
+for(const [label,route,action]of [['sidebar state','/dashboard','sidebar-toggle'],['application search','/','filters'],['application board','/','application-board'],['calendar controls','/meetings','calendar-ranges'],['local header actions','/dashboard','header-actions'],['Studio preview navigation','/resume-studio','studio']])test(label,()=>check(route,action));

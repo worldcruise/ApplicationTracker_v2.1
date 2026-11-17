@@ -5,7 +5,7 @@ export const INTERVIEW_COLORS=['#eeebff','#d7ceff','#b3a0f5','#8964d7','#6941b0'
 export const MEETING_TOPIC_TAGS=[['panel','Panel'],['marathon','Marathon'],['final','Final'],['technical','Technical'],['system_design','System Design'],['live_coding','Live Coding'],['behavioral','Behavioral'],['cultural','Cultural']];
 export const isApplicationRecord=record=>['offer','rejected','archived'].includes(record.status);
 export const meetingApplicationId=record=>record.applicationId||record.id;
-export const MEETING_STATUS_LABELS={upcoming:'Upcoming',pending:'Pending',passed:'Passed',failed:'Failed'};
+export const MEETING_STATUS_LABELS={upcoming:'Upcoming',pending:'Pending',passed:'Passed',failed:'Failed',needs_action:'Needs action'};
 export const MEETING_GROUPS=[
   {id:'active',label:'Screening & Interview',statuses:['screen','interview']},
   {id:'closed',label:'Rejected & Failed',statuses:['rejected','archived']},
@@ -21,13 +21,37 @@ export function meetingIsPast(meeting,now=Date.now()){
 }
 export function meetingStatus(meeting,now=Date.now()){
   if(['passed','failed'].includes(meeting?.result))return meeting.result;
+  if(meetingNeedsAction(meeting,now))return 'needs_action';
   return Date.parse(meeting?.startsAt)>Number(now)?'upcoming':'pending';
 }
+export function meetingNeedsAction(meeting,now=Date.now()){
+  const review=meeting?.review;
+  return !!(review?.required&&!['cancelled','draft','no_show'].includes(meeting.lifecycle)&&Number.isFinite(Date.parse(meeting.endsAt))&&Date.parse(meeting.endsAt)<=Number(now)&&(!review.completedAt||!meeting.transcript?.trim()&&!review.transcriptUnavailableReason||!review.followUp&&!review.followUpNotRequiredReason));
+}
 export function recordUpdatedAt(record){return record.updatedAt||record.meeting?.updatedAt||record.date||record.appliedAt;}
+export function meetingScheduleSnapshot(meeting){
+  return Object.fromEntries(['kind','startsAt','endsAt','mode','round','interviewer','topics','phone','joinUrl','transcript'].filter(key=>meeting[key]!==undefined).map(key=>[key,structuredClone(meeting[key])]));
+}
 export function meetingRecordUpdate(record,fields,now=new Date()){
-  const updatedAt=new Date(now).toISOString(),meeting={...record.meeting,...fields.meeting};
-  const kind=meeting.kind||(!isApplicationRecord(record)?record.status:'interview');
+  const updatedAt=new Date(now).toISOString();let meeting={...record.meeting,...fields.meeting},history=record.meetingHistory||record.meeting?.history||[];
+  const sameTime=(a,b)=>a===b||Number.isFinite(Date.parse(a))&&Date.parse(a)===Date.parse(b);
+  const original=record.meeting,changedSchedule=fields.meeting&&original?.startsAt&&meeting.startsAt&&(!sameTime(original.startsAt,meeting.startsAt)||!sameTime(original.endsAt,meeting.endsAt));
+  if(changedSchedule){
+    const reason=String(fields.meeting.rescheduleReason||'').trim();
+    if(!reason)throw Error('Enter a rescheduled reason before changing the meeting time.');
+    if(reason.length>10000)throw Error('Keep the rescheduled reason within 10,000 characters.');
+    meeting={...meeting,rescheduled:true,scheduleHistory:[...(original.scheduleHistory||[]),{id:crypto.randomUUID(),changedAt:updatedAt,reason,previous:meetingScheduleSnapshot(original),nextStartsAt:meeting.startsAt,nextEndsAt:meeting.endsAt}]};
+    delete meeting.rescheduleReason;
+  }
+  let kind=meeting.kind||(!isApplicationRecord(record)?record.status:'interview');
   let status=fields.status||record.status;
+  if(fields.status==='interview'&&kind==='screen'){
+    if(!meetingIsPast(meeting,now)||meeting.result!=='passed')throw Error('Complete screening and mark it Passed before moving to Interview.');
+    const {history:storedHistory,...screening}=meeting;
+    const entry={id:`${record.id}:screening`,applicationId:meetingApplicationId(record),status:'screen',companyName:record.companyName,jobTitle:record.jobTitle,meeting:{...screening,kind:'screen',round:null}};
+    history=[...history.filter(item=>item.id!==entry.id),entry];
+    kind='interview';meeting={kind,round:1,result:'pending',mode:'video',topics:[],startsAt:'',endsAt:'',joinUrl:'',phone:'',interviewer:'',transcript:'',chatHistory:''};
+  }
   if(['screen','interview'].includes(fields.status)&&isApplicationRecord(record)&&meeting.result==='failed')meeting.result='pending';
   if(fields.meeting?.result==='failed')status='archived';
   else if(fields.meeting&&record.status==='archived'&&record.meeting?.result==='failed')status=kind;
@@ -36,13 +60,13 @@ export function meetingRecordUpdate(record,fields,now=new Date()){
     meeting.result='failed';
   }
   if(status==='offer'&&meeting.startsAt&&meetingIsPast(meeting,now))meeting.result='passed';
-  return {...record,...fields,status,updatedAt,...meeting.startsAt?{meeting:{...meeting,kind,updatedAt,applicationStage:status}}:{}};
+  return {...record,...fields,status,updatedAt,...history.length?{meetingHistory:history}:{},...record.meeting||fields.meeting?{meeting:{...meeting,kind,updatedAt,applicationStage:status}}:{}};
 }
 export function projectMeetingRecords(records,details={}){
   const rows=records.map(row=>{
     const meeting=details[row.id]||row.meeting,status=meeting?.applicationStage||row.status;
     const updatedAt=meeting?.updatedAt||row.updatedAt;
-    return {...row,meeting,status,updatedAt,appliedAt:isApplicationRecord({status})?(updatedAt||row.date||row.appliedAt):(meeting?.startsAt||row.appliedAt||row.date)};
+    return {...row,meeting,meetingHistory:meeting?.history||row.meetingHistory,status,updatedAt,appliedAt:isApplicationRecord({status})?(updatedAt||row.date||row.appliedAt):(meeting?.startsAt||row.appliedAt||row.date)};
   });
   const outcomes=new Map();
   for(const row of rows.filter(isApplicationRecord)){
@@ -70,23 +94,42 @@ export function meetingRange(meeting,timeZone,compact=false){
 }
 export function previousMeetings(record,records,now=Date.now()){
   const outcome=isApplicationRecord(record);
-  if(record.status!=='interview'&&!outcome)return [];
-  const before=outcome?Number(now):Math.min(Number(now),Date.parse(record.meeting?.startsAt));
+  if(!hasPreviousMeetings(record))return [];
+  const startsAt=Date.parse(record.meeting?.startsAt);
+  const before=outcome||!Number.isFinite(startsAt)?Number(now):Math.min(Number(now),startsAt);
   const all=new Map();
   for(const row of records.filter(row=>meetingApplicationId(row)===meetingApplicationId(record))){
-    if(row.meeting?.startsAt&&(!isApplicationRecord(row)||['screen','interview'].includes(row.meeting.kind))){const entry=isApplicationRecord(row)?{...row,id:`${row.id}:last-meeting`,status:row.meeting.kind}:row;all.set(entry.id,entry);}
-    for(const entry of row.meetingHistory||[])all.set(entry.id,{...entry,applicationId:meetingApplicationId(row)});
+    if(row.meeting?.startsAt&&(!isApplicationRecord(row)||['screen','interview'].includes(row.meeting.kind))){const entry=isApplicationRecord(row)?{...row,id:`${row.id}:last-meeting`,sourceMeetingId:row.id,status:row.meeting.kind}:row;all.set(entry.id,entry);}
+    for(const entry of row.meetingHistory||row.meeting?.history||[])if(!entry.applicationId||entry.applicationId===meetingApplicationId(row))all.set(entry.id,{...entry,applicationId:meetingApplicationId(row)});
   }
   return [...all.values()].filter(row=>(outcome||row.id!==record.id)&&!isApplicationRecord(row)&&row.meeting?.lifecycle!=='cancelled'&&Date.parse(row.meeting?.startsAt)<before&&Date.parse(row.meeting?.endsAt||row.meeting?.startsAt)<=before)
     .sort((a,b)=>Date.parse(a.meeting.startsAt)-Date.parse(b.meeting.startsAt)||a.id.localeCompare(b.id));
 }
-export function applicationConversation(record,records){
-  const messages=new Map(),fragments=[];
-  for(const row of records.filter(row=>meetingApplicationId(row)===meetingApplicationId(record))){
-    for(const message of row.conversationMessages||row.meeting?.messages||[])if(message.id&&!messages.has(message.id))messages.set(message.id,message);
-    if(row.meeting?.chatHistory?.trim())fragments.push({id:row.id,text:row.meeting.chatHistory});
+export function hasPreviousMeetings(record){return ['screen','interview','archived','offer'].includes(record.status);}
+export function previousMeetingLabel(record){const label=record.status==='screen'?'Screening':`Round ${meetingRound(record.meeting.round)}`;return record.eventType==='rescheduled'?`${label} · Rescheduled`:label;}
+export function previousMeetingHistory(record,records,now=Date.now()){
+  if(!hasPreviousMeetings(record))return [];
+  const meetings=previousMeetings(record,records,now),events=[];
+  const parents=new Map([...meetings,record].map(parent=>[parent.sourceMeetingId||parent.id,parent]));
+  for(const [parentId,parent] of parents){
+    const scheduleHistory=parent.meeting?.scheduleHistory||[],entries=scheduleHistory.length?scheduleHistory:parent.meeting?.rescheduled?[{id:'legacy',reason:parent.meeting.rescheduleReason||'',previous:null}]:[];
+    for(const entry of entries){
+      const previous=entry.previous||{},kind=previous.kind||parent.meeting?.kind||parent.status;
+      events.push({id:`${parentId}:rescheduled:${entry.id}`,sourceMeetingId:parentId,applicationId:meetingApplicationId(record),companyName:parent.companyName,jobTitle:parent.jobTitle,historyOnly:true,eventType:'rescheduled',changedAt:entry.changedAt||null,status:kind==='screen'?'screen':'interview',
+        meeting:{...previous,kind,round:kind==='screen'?null:previous.round||parent.meeting?.round,lifecycle:'cancelled',rescheduled:true,result:'pending',startsAt:previous.startsAt||'',endsAt:previous.endsAt||'',transcript:`Rescheduled reason\n\n${entry.reason||'No reason recorded.'}`}});
+    }
   }
-  return {messages:[...messages.values()].sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)||a.id.localeCompare(b.id)),fragments};
+  return [...new Map([...meetings,...events].map(entry=>[entry.id,entry])).values()].sort((a,b)=>(Date.parse(a.meeting.startsAt)||Date.parse(a.changedAt)||0)-(Date.parse(b.meeting.startsAt)||Date.parse(b.changedAt)||0)||a.id.localeCompare(b.id));
+}
+export function applicationConversation(record,records){
+  const messages=new Map(),fragments=new Map();
+  for(const row of records.filter(row=>meetingApplicationId(row)===meetingApplicationId(record))){
+    for(const entry of [row,...(row.meetingHistory||row.meeting?.history||[])]){
+      for(const message of entry.conversationMessages||entry.meeting?.messages||[])if(message.id&&!messages.has(message.id))messages.set(message.id,message);
+      if(entry.meeting?.chatHistory?.trim())fragments.set(entry.id,{id:entry.id,text:entry.meeting.chatHistory});
+    }
+  }
+  return {messages:[...messages.values()].sort((a,b)=>Date.parse(b.sentAt)-Date.parse(a.sentAt)||a.id.localeCompare(b.id)),fragments:[...fragments.values()]};
 }
 export function initialMeetingFocus(rows,now=Date.now()){
   const eligible=rows.filter(row=>!isApplicationRecord(row)&&!['cancelled','no_show','draft'].includes(row.meeting?.lifecycle)&&Number.isFinite(Date.parse(row.meeting?.startsAt)));

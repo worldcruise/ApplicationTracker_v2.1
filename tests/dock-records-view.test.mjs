@@ -7,6 +7,7 @@ import { mountJobRecords } from '../extension/studio/job-records-view.js';
 import { JOB_RECORDS_MARKUP } from '../extension/studio/job-records-markup.js';
 import { DASHBOARD_MARKUP } from '../extension/studio/reference-dashboard-markup.js';
 import { mountReferenceDashboard } from '../extension/studio/reference-dashboard.js';
+import {createMeetingSamples} from './fixtures/meeting-samples.mjs';
 
 async function until(condition) { for(let i=0;i<200;i++){if(condition())return;await delay(5);}throw Error('The dock did not settle.'); }
 async function view(t,options={}) {
@@ -25,18 +26,23 @@ async function view(t,options={}) {
 test('dock HTML uses the reference layout, real records, and keeps edits across tabs and reopening',async t=>{
   const app=await view(t);
   assert.equal(app.$('#jr-app-count').textContent,'1');assert.equal(app.$('#jr-queue-count').textContent,'0');assert.ok(!app.host.textContent.includes('Morgan Taylor'));assert.ok(!JOB_RECORDS_MARKUP.includes('<script'));
-  await app.click('[data-command="view"]');await app.click('#jr-view-details');await app.click('#jr-edit-slot [data-command="edit"]');
-  app.enter('#jr-letter-input','Keep this unsaved note');
-  await app.click('#jr-view-description');await app.click('#jr-view-details');assert.equal(app.$('#jr-letter-input').value,'Keep this unsaved note');
-  await app.click('#jr-tab-queue');await app.click('#jr-tab-applications');await app.click('[data-command="edit"]');assert.equal(app.$('#jr-letter-input').value,'Keep this unsaved note');
-  await app.remount();assert.equal(app.$('#jr-letter-input').value,'Keep this unsaved note');assert.equal(app.$('#jr-edit-form').hidden,false);
+  await app.click('.jr-application-record .jr-card-main');await app.click('#jr-edit-slot [data-command="edit"]');
+  app.enter('#jr-salary','$100,000 / year');
+  await app.click('#jr-view-description');await app.click('#jr-view-details');assert.equal(app.$('#jr-salary').value,'$100,000 / year');
+  await app.click('#jr-tab-queue');await app.click('#jr-tab-applications');await app.click('.jr-application-record .jr-card-main');await app.click('#jr-edit-slot [data-command="edit"]');assert.equal(app.$('#jr-salary').value,'$100,000 / year');
+  await app.remount();assert.equal(app.$('#jr-salary').value,'$100,000 / year');assert.equal(app.$('#jr-edit-form').hidden,false);
   app.$('#jr-status-select').value='interview';app.$('#jr-status-select').dispatchEvent(new app.page.Event('change',{bubbles:true}));
   app.$('#jr-edit-form').dispatchEvent(new app.page.Event('submit',{bubbles:true,cancelable:true}));await until(()=>app.browser.storage.local.values.appliedList[0].status==='interview');
   assert.equal(app.browser.storage.local.values.appliedList[0].status,'interview');
 });
 
 test('Applications manual add requires company and role and creates an application instead of a queue job',async t=>{
-  const app=await view(t);await app.click('[data-command="add"]');
+  const app=await view(t);
+  assert.equal(app.$('.jr-search-row [data-command="add"]').textContent,'Add');
+  assert.equal(app.$('.jr-search-row input').nextElementSibling.className,'jr-manage');
+  assert.equal(app.$('.jr-toolbar').hidden,true);
+  await app.click('[data-command="manage"]');assert.equal(app.$('.jr-manage-menu').hidden,false);
+  await app.click('[data-command="add"]');
   assert.equal(app.$('#jr-add-form h3').textContent,'Add application record manually');
   for(const name of ['company','role']){const input=app.$(`#jr-add-form [name="${name}"]`);assert.equal(input.required,true);assert.equal(input.previousElementSibling.querySelector('.jr-required').textContent,'*');}
   assert.equal(app.$('#jr-add-form [name="url"]').required,false);
@@ -56,12 +62,40 @@ test('queue detail keeps only apply and delete actions and places Update record 
   assert.equal((await app.request('DOCK_RECORDS_STATE')).jobs.find(item=>item.id===job.id).resume.cvJsonRaw,cv);
 });
 
-test('Delete all sits beside Add manually only on the queue and clears jobs without touching applications',async t=>{
+test('queue details offer manual application recording below Update record and preserve submitted documents',async t=>{
+ const app=await view(t),ready=await app.ready(await app.create('manual-detail')),saved=await app.mutate('update',ready,{...ready,cvJsonRaw:ready.resume.cvJsonRaw,coverLetterRaw:'Submitted letter',coverLetterEnabled:true,salary:'$120,000'}),job=saved.jobs[0];await app.api.select(job.id);
+ const actions=[...app.$('#jr-edit-slot').children];assert.deepEqual(actions.map(node=>node.dataset.command),['edit','mark-applied']);assert.equal(actions[1].textContent,'Mark as applied');
+ await app.click('#jr-edit-slot [data-command="edit"]');assert.equal(app.$('[data-command="mark-applied"]').disabled,true);app.$('#jr-salary').dispatchEvent(new app.page.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(app.$('[data-command="mark-applied"]').disabled,false);
+ await app.click('[data-command="mark-applied"]');const state=await app.request('DOCK_RECORDS_STATE'),application=state.applications.find(row=>row.url===job.url);assert.equal(state.jobs.length,0);assert.equal(application.status,'applied');assert.deepEqual(application.resume,job.resume);assert.equal(application.coverLetterRaw,'Submitted letter');assert.equal(application.salary,'$120,000');assert.equal(app.$('[data-command="mark-applied"]'),null);assert.equal(app.$('#jr-tab-applications').getAttribute('aria-selected'),'true');
+});
+
+test('Delete opens a date-filtered selection dialog for queue jobs and applications',async t=>{
   const app=await view(t);await app.create('first');await app.create('second');
-  assert.equal(app.$('[data-command="delete-all"]').hidden,true);await app.api.show('queue');
-  const clear=app.$('[data-command="delete-all"]');assert.equal(clear.hidden,false);assert.equal(clear.previousElementSibling.dataset.command,'add');
-  await app.click('[data-command="delete-all"]');assert.equal(app.$('#jr-queue-count').textContent,'0');assert.equal(app.$('#jr-app-count').textContent,'1');assert.equal(clear.disabled,true);
+  assert.equal(app.$('[data-command="delete-all"]'),null);await app.api.show('queue');
+  const clear=app.$('[data-command="delete-records"]');assert.equal(clear.previousElementSibling.getAttribute('role'),'separator');assert.equal(clear.textContent,'Delete');
+  await app.click('[data-command="delete-records"]');
+  const dialog=app.$('.record-delete-dialog');assert.equal(dialog.open,true);assert.equal(dialog.querySelector('select').value,'24hours');assert.equal(dialog.querySelector('.record-delete-confirm').disabled,true);
+  const period=dialog.querySelector('select');period.value='custom';period.dispatchEvent(new app.page.Event('change'));
+  assert.equal(dialog.querySelectorAll('tbody tr').length,2);
+  dialog.querySelector('[aria-label="Select all shown records"]').click();assert.equal(dialog.querySelectorAll('tbody input:checked').length,2);
+  await app.click('.record-delete-confirm');await until(()=>!app.$('.record-delete-dialog'));
+  assert.equal(app.$('#jr-queue-count').textContent,'0');assert.equal(app.$('#jr-app-count').textContent,'1');assert.equal(clear.disabled,true);
   await app.remount();assert.equal(app.$('#jr-queue-count').textContent,'0');
+  await app.api.show('applications');await app.click('[data-command="delete-records"]');assert.equal(app.$('.record-delete-dialog h2').textContent,'Delete applications');
+  await app.click('.record-delete-close');assert.equal(app.$('#jr-app-count').textContent,'1');
+});
+
+test('Manage offers import and export only for queues, closes on Escape, and opens the export picker',async t=>{
+  const app=await view(t);await app.create();
+  await app.api.show('queue');await app.click('[data-command="manage"]');
+  assert.deepEqual([...app.$('.jr-manage-menu').querySelectorAll('[role=menuitem]')].filter(button=>!button.hidden).map(button=>button.textContent),['Add','Import','Export','Delete']);
+  app.$('[data-command="add"]').dispatchEvent(new app.page.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(app.$('.jr-manage-menu').hidden,true);
+  await app.click('[data-command="manage"]');await app.click('[data-command="export-records"]');
+  assert.equal(app.$('.jr-manage-menu').hidden,true);assert.equal(app.$('.record-delete-dialog h2').textContent,'Export queue jobs');
+  assert.equal(app.$('[aria-label="Export period"]').value,'24hours');assert.equal(app.$('.record-export-confirm').disabled,true);await app.click('.record-delete-close');
+  await app.api.show('applications');await app.click('[data-command="manage"]');
+  assert.deepEqual([...app.$('.jr-manage-menu').querySelectorAll('[role=menuitem]')].filter(button=>!button.hidden).map(button=>button.textContent),['Add','Delete']);
+  const saved=await app.request('DOCK_RECORDS_STATE');assert.equal(saved.jobs.length,1);assert.equal(saved.applications.length,1);
 });
 
 test('Update record enables fields and becomes a Save button that commits edits',async t=>{
@@ -109,10 +143,10 @@ test('dock job creation, job description, failed-job undo and application submis
 
 test('dock blocks stale application saves and retains unsaved edit text',async t=>{
   const app=await view(t);
-  await app.click('[data-command="view"]');await app.click('#jr-view-details');await app.click('#jr-edit-slot [data-command="edit"]');await app.click('#jr-letter-enabled');app.enter('#jr-letter-input','Retained conflict text');
+  await app.click('.jr-application-record .jr-card-main');await app.click('#jr-edit-slot [data-command="edit"]');app.enter('#jr-salary','$100,000 / year');
   const raw=app.browser.storage.local.values.appliedList.map(item=>({...item,status:'offer'}));await app.browser.storage.local.set({appliedList:raw});await delay(20);
   app.$('#jr-edit-form').dispatchEvent(new app.page.Event('submit',{bubbles:true,cancelable:true}));await until(()=>app.$('#jr-feedback').dataset.error==='true');
-  assert.equal(app.$('#jr-letter-input').value,'Retained conflict text');assert.equal(app.browser.storage.local.values.appliedList[0].status,'offer');
+  assert.equal(app.$('#jr-salary').value,'$100,000 / year');assert.equal(app.browser.storage.local.values.appliedList[0].status,'offer');
 });
 
 test('queue cards have four actions, gate missing documents, and open Details from the main section',async t=>{
@@ -120,7 +154,7 @@ test('queue cards have four actions, gate missing documents, and open Details fr
   await app.api.show('queue');
   for(const record of [queued,ready]){
     const card=app.$(`[data-id="${record.id}"]`);assert.ok(card.classList.contains('jr-queue-record'));
-    assert.deepEqual([...card.querySelectorAll('.jr-record-actions button')].map(node=>node.textContent),['Resume','Cover letter','Update','Delete']);
+    assert.deepEqual([...card.querySelectorAll('.jr-record-actions button')].map(node=>node.getAttribute('aria-label')||node.textContent),['Resume','Cover letter','Update','Delete']);
     assert.equal(card.querySelector('[data-command="open-resume"]').disabled,!record.resume?.snapshot);
     assert.equal(card.querySelector('[data-command="cover-letter"]').disabled,true);
     assert.equal(card.querySelector('.jr-card-salary').textContent,'Salary not listed');
@@ -133,6 +167,53 @@ test('queue cards have four actions, gate missing documents, and open Details fr
   let opened=0;app.deps.openStudio=async()=>{opened++;return{tabId:100};};app.restart();
   await app.click(`[data-id="${ready.id}"] [data-command="open-resume"]`);assert.equal(opened,1);const restored=(await app.deps.drafts.read()).draft;assert.equal(restored.cvJsonRaw,savedJson);assert.equal(restored.jobInputRaw,`${ready.url}\n${ready.description}`);
   assert.equal(app.$('#jr-list').hidden,false,'Opening Studio does not replace the queue with an inline preview');assert.equal(app.tabs.length,0);
+});
+
+test('web queue List uses nine fields with status tags, document availability and working details',async t=>{
+  const app=await view(t,{searchQueue:true,stateKeyPrefix:'web-records-ui:v1'}),queued=await app.create('queued'),ready=await app.ready(await app.create('ready'));
+  await app.api.show('queue');app.api.setLayout('list');
+  assert.equal(app.$('.jr-search-row').hidden,false);
+  assert.equal(app.$('.jr-search-row input').getAttribute('aria-label'),'Search job queues by company or role');
+  assert.deepEqual([...app.$('.jr-record-table thead tr').children].map(cell=>cell.textContent),['Company','Role','Salary','Status','Updated','JD','Resume','Cover letter','Actions']);
+  for(const record of [queued,ready]){
+    const row=app.$(`tr[data-id="${record.id}"]`);
+    assert.equal(row.children.length,9);assert.equal(row.querySelector('.jr-status').textContent,record.status);
+    assert.equal(row.querySelector('select'),null);assert.ok(row.querySelector('.jr-status svg'));
+    assert.equal(row.querySelector('[data-command="open-resume"]').disabled,!record.resume?.snapshot);
+    assert.equal(row.querySelector('[data-command="cover-letter"]').disabled,true);
+    assert.deepEqual([...row.querySelectorAll('.jr-record-actions button')].map(button=>button.textContent),['Update','Delete']);
+  }
+  await app.click(`tr[data-id="${ready.id}"] [data-command="description"]`);
+  assert.equal(app.$('#jr-description-pane').hidden,false);assert.equal(app.$('.jr-description-copy').textContent,ready.description);
+  await app.click('[data-command="back"]');assert.equal(app.$('#job-records-design').dataset.layout,'list');
+  await app.click(`tr[data-id="${queued.id}"] .jr-table-main`);assert.equal(app.$('#jr-details-pane').hidden,false);
+  await app.click('[data-command="back"]');app.api.setLayout('cards');
+  assert.equal(app.$('.jr-record-table'),null);assert.equal(app.host.querySelectorAll('.jr-queue-record').length,2);
+  assert.equal(app.$('.jr-record-actions').children.length,4);
+});
+
+test('web queue search filters both layouts without changing saved records and remembers its view',async t=>{
+  const app=await view(t,{searchQueue:true,stateKeyPrefix:'web-records-ui:v1'});
+  await app.mutate('create',null,{company:'Cedar Health',role:'Product Designer',url:'https://example.test/cedar',description:'Design useful products.'});await app.create('second');await app.api.show('queue');
+  app.enter('.jr-search-row input','cedar designer');assert.equal(app.host.querySelectorAll('.jr-queue-record').length,1);
+  app.api.setLayout('list');assert.equal(app.$('.jr-record-table tbody').children.length,1);
+  assert.match(app.$('.jr-record-table tbody').textContent,/Cedar Health/);
+  app.enter('.jr-search-row input','no matching company');assert.match(app.$('.jr-empty').textContent,/No matching records/);
+  assert.equal((await app.request('DOCK_RECORDS_STATE')).jobs.length,2);
+  app.enter('.jr-search-row input','cedar designer');await app.remount();
+  assert.equal(app.$('#job-records-design').dataset.layout,'list');assert.equal(app.$('.jr-record-table tbody').children.length,1);
+  assert.equal(app.$('.jr-search-row input').value,'cedar designer');
+});
+
+test('application cards match queue actions and ordinary record edits preserve the current stage',async t=>{
+  const app=await view(t),created=await app.mutate('create-application',null,{company:'Screening company',role:'Engineer'});
+  const record=created.applications.find(row=>row.id===created.selectedId);await app.api.refresh();
+  const card=app.$(`[data-id="${record.id}"]`);assert.ok(card.classList.contains('jr-compact-record'));
+  assert.deepEqual([...card.querySelectorAll('.jr-record-actions button')].map(node=>node.getAttribute('aria-label')||node.textContent),['Resume','Cover letter','Update','Delete']);
+  assert.equal(card.querySelector('[data-command="open-resume"]').disabled,true);assert.equal(card.querySelector('[data-command="application-letter"]').disabled,true);
+  await app.click(`[data-id="${record.id}"] .jr-card-main`);
+  assert.equal(app.$('#jr-tab-applications').getAttribute('aria-selected'),'true');assert.equal(app.$('#jr-details-pane').hidden,false);
+
 });
 
 test('salary edits persist to queue cards without invalidating a saved resume',async t=>{
@@ -194,11 +275,29 @@ test('Dashboard back navigation is immediate even when saving queue state fails'
   await delay(10);assert.match(app.$('#jr-feedback').textContent,/Unsaved edits remain/);
 });
 
+test('dock tiles show pending queue counts and meeting actions without the old summary or quick-action counts',async t=>{
+  const page=new Window();page.document.body.innerHTML=DASHBOARD_MARKUP;const root=page.document.querySelector('#at-reference-dock'),f=await dockFixture(t);
+  await f.browser.storage.local.set({appliedList:createMeetingSamples()});
+  f.browser.runtime.sendMessage=async message=>({ok:true,result:message.operation==='DOCK_RECORDS_STATE'?{jobs:[{id:'one',status:'Ready'},{id:'two',status:'Queued'}],applications:[]}:{candidate:null,candidates:[]}});
+  let selected,attention;
+  const close=mountReferenceDashboard(root,f.browser,{privateStorage:f.storage,onApplications:tab=>{selected=tab;},onMeetings:needed=>{attention=needed;}});t.after(async()=>{close();await page.happyDOM.abort();});
+  await until(()=>root.querySelector('.rd-stat-resume strong').textContent==='2');
+  assert.ok(root.querySelector('.rd-stats').firstElementChild.classList.contains('rd-stat-applications'));
+  assert.equal(root.querySelector('.rd-stat-resume .rd-stat-label').textContent,'Pending');
+  assert.equal(root.querySelector('.rd-stat-resume svg').classList.contains('lucide-file-text'),true);
+  assert.equal(root.querySelector('.rd-queue-summary,.rd-action-count'),null);
+  assert.equal(root.querySelector('.rd-stat-meetings').dataset.needsAction,'true');
+  assert.equal(root.querySelector('.rd-stat-hint'),null);
+  root.querySelector('.rd-stat-resume').click();await until(()=>selected==='queue');
+  root.querySelector('.rd-stat-meetings').click();await until(()=>attention===true);
+  assert.match(root.querySelector('.rd-logo img').src,/icon\.png$/);
+});
+
 test('dock logo opens the web Dashboard and reuses its existing tab',async t=>{
   const page=new Window();page.document.body.innerHTML=DASHBOARD_MARKUP;const root=page.document.querySelector('#at-reference-dock'),f=await dockFixture(t);
   f.browser.runtime.sendMessage=async()=>({ok:true,result:{candidate:null,candidates:[]}});
   const close=mountReferenceDashboard(root,f.browser);t.after(async()=>{close();await page.happyDOM.abort();});
-  const logo=root.querySelector('button.rd-brand');assert.equal(logo.getAttribute('aria-label'),'Open Dashboard');logo.querySelector('svg').dispatchEvent(new page.MouseEvent('click',{bubbles:true}));
+  const logo=root.querySelector('button.rd-brand');assert.equal(logo.getAttribute('aria-label'),'Open Dashboard');logo.querySelector('img').dispatchEvent(new page.MouseEvent('click',{bubbles:true}));
   await until(()=>f.tabs.length===1);assert.equal(f.tabs[0].url,f.browser.runtime.getURL('options.html')+'#/dashboard');
   await until(()=>!logo.disabled);let activated;
   f.browser.tabs.query=async()=>[{id:44,url:f.tabs[0].url}];f.browser.tabs.update=async(id,options)=>{activated={id,...options};};logo.click();await until(()=>activated);
@@ -215,14 +314,29 @@ test('dock Applications opens its internal workspace and the original dashboard 
 });
 
 test('actual dock entry point switches to the workspace and back without navigating a web page',async t=>{
-  const page=new Window(),f=await dockFixture(t),previous={document:globalThis.document,window:globalThis.window,chrome:globalThis.chrome};
-  page.document.body.innerHTML='<div id="reference-dashboard-root"></div>';globalThis.document=page.document;globalThis.window=page;globalThis.chrome=f.browser;
-  f.browser.runtime.sendMessage=async message=>{try{return{ok:true,requestId:message.requestId,result:message.operation==='DASHBOARD_STATE'?{candidate:await f.deps.profiles.bootstrap(),candidates:[]} : await f.request(message.operation,message.payload)};}catch(error){return{ok:false,error:{message:error.message}};}};
+  const page=new Window({settings:{disableIframePageLoading:true}}),f=await dockFixture(t),previous={document:globalThis.document,window:globalThis.window,chrome:globalThis.chrome};
+  page.document.body.innerHTML='<div id="native-panel-root"></div>';globalThis.document=page.document;globalThis.window=page;globalThis.chrome=f.browser;
+  f.browser.runtime.sendMessage=async message=>{try{return{ok:true,requestId:message.requestId,result:message.operation==='DASHBOARD_STATE'?{candidate:await f.deps.profiles.bootstrap(),candidates:[]} : message.operation==='DOCK_APPLY_STATE'?{candidate:{id:'candidate-1',name:'Test Candidate'},candidates:[],jobs:(await f.request('DOCK_RECORDS_STATE')).jobs,tabs:[],defaults:{},run:null}:await f.request(message.operation,message.payload)};}catch(error){return{ok:false,error:{message:error.message}};}};
   try{
-    await import('../extension/dashboard.js');await delay(20);
+    await f.browser.storage.session.set({'dock-records-ui:v1:41':{tab:'applications',layouts:{applications:'list',queue:'list'}}});
+    const dispatch=f.browser.runtime.sendMessage;f.browser.runtime.onMessage={addListener(){},removeListener(){}};
+    f.browser.runtime.sendMessage=async message=>message.type==='native-panel:request'?{ok:true,result:message.action==='context'?{windowId:41}:message.action==='take-view'?{}:await dispatch(message.envelope)}:dispatch(message);
+    await import('../extension/sidepanel.js');await until(()=>page.document.documentElement.dataset.panelReady==='true');
     page.document.querySelector('[data-action="Applications"]').click();await until(()=>page.document.querySelector('#jr-app-count')?.textContent==='1');
     assert.equal(page.document.querySelector('.rd-main').hidden,true);assert.equal(page.document.querySelector('#job-records-design').hidden,false);
+    assert.equal(page.document.querySelector('#job-records-design').dataset.layout,'cards','The dock ignores old saved List preferences');
+    assert.equal(page.document.querySelector('.jr-view-toolbar,.jr-record-table'),null);
+    assert.equal(page.document.querySelector('.jr-tabs').hidden,true,'Applications no longer exposes a queue tab');
+    assert.equal(page.document.querySelector('.jr-header h2').textContent,'Applications');
+    page.document.querySelector('[data-command="manage"]').click();
+    assert.deepEqual([...page.document.querySelectorAll('.jr-manage-menu [role=menuitem]')].filter(button=>!button.hidden).map(button=>button.textContent),['Add','Delete']);
     page.document.querySelector('[data-command="dashboard"]').click();await until(()=>!page.document.querySelector('.rd-main').hidden);
+    page.document.querySelector('[data-action="Apply to Job"]').click();await until(()=>page.document.querySelector('#at-reference-dock').dataset.dockView==='apply');
+    const frame=page.document.querySelector('.dock-ai-apply-frame');assert.ok(frame);assert.equal(page.document.querySelector('#apply-ready-queue-design'),null);
+    await until(()=>frame.src.includes('windowId='));const url=new URL(frame.src);
+    page.dispatchEvent(new page.MessageEvent('message',{source:frame.contentWindow,origin:'chrome-extension://dock-test',data:{type:'ai-apply.ready',nonce:url.searchParams.get('nonce')}}));await delay(5);
+    page.document.querySelector('.dock-ai-apply .dock-workspace-header button').click();assert.equal(page.document.querySelector('.rd-main').hidden,false);
     assert.equal(page.document.querySelector('#job-records-design').hidden,true);assert.equal(f.tabs.length,0);
+    page.document.querySelector('.rd-stat-resume').click();await until(()=>page.document.querySelector('#at-reference-dock').dataset.dockView==='apply');assert.equal(page.document.querySelectorAll('.dock-ai-apply-frame').length,1);
   }finally{page.dispatchEvent(new page.Event('pagehide'));for(const[name,value]of Object.entries(previous))globalThis[name]=value;await page.happyDOM.abort();}
 });

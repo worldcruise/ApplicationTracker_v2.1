@@ -1,0 +1,61 @@
+.workflow-tools { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+.workflow-attention-slot { display:inline-flex; flex:none; width:190px; height:54px; }
+.workflow-attention { --workflow-attention-ink:var(--web-muted,#667085); position:fixed; z-index:45; top:88px; right:20px; display:flex; align-items:center; gap:9px; box-sizing:border-box; width:190px; max-width:calc(100vw - 24px); min-height:54px; padding:9px 11px; border:1px solid var(--web-line,#ddd); border-radius:10px; background:var(--color-surface,#fff); color:var(--workflow-attention-ink); font:12px/1.35 system-ui,sans-serif; text-align:left; cursor:pointer; box-shadow:0 3px 12px #17122e12; }
+.workflow-attention[data-active=true] { --workflow-attention-ink:#b42318; background:#fff5f4; border-color:#f04438; animation:workflow-attention-blink 1.8s ease-in-out infinite; }
+.workflow-attention-icon { display:grid; place-items:center; flex:none; }
+.workflow-attention-icon svg { width:23px; height:23px; }
+.workflow-attention-copy { display:grid; gap:3px; min-width:0; }
+.workflow-attention-copy strong { font-size:12px; font-weight:650; white-space:nowrap; }
+.workflow-attention-copy small { font-size:10px; line-height:1.3; }
+.workflow-attention:focus-visible { outline:2px solid var(--web-accent,#7047eb); outline-offset:3px; }
+#at-reference-dock .workflow-attention { color:var(--workflow-attention-ink); }
+#at-reference-dock .workflow-attention { top:64px; right:13px; width:174px; min-height:50px; padding:7px 9px; gap:7px; }
+#at-reference-dock .workflow-attention-slot { width:174px; height:50px; }
+.meeting-card[data-needs-action=true] { border:2px solid #f04438; box-shadow:inset 0 0 5px #f044381a,0 0 6px #f0443859; animation:workflow-attention-blink 1.8s ease-in-out infinite; }
+@keyframes workflow-attention-blink {
+  0%,100% { border-color:#f0443866; box-shadow:inset 0 0 5px #f0443800,0 0 6px #f0443800; }
+  50% { border-color:#f04438; box-shadow:inset 0 0 5px #f044381a,0 0 6px #f0443859; }
+}
+@media(prefers-reduced-motion:reduce) { .meeting-card[data-needs-action=true],.workflow-attention[data-active=true] { animation:none; } }
+.meeting-card[data-attention-focus=true] { border:2px solid #84cc16; border-color:#84cc16; box-shadow:inset 0 0 12px #a3e63540,0 0 9px 1px #84cc1680; animation:none; }
+.meeting-workflow { box-sizing:border-box; width:min(580px,calc(var(--workflow-width,100vw) - 24px)); max-width:calc(100vw - 24px); max-height:calc(100dvh - 48px); margin:auto; padding:0; border:1px solid var(--web-line,#dedee9); border-radius:16px; color:var(--web-ink,#242331); background:var(--color-surface,#fff); box-shadow:0 24px 70px #17122e35; font:13px/1.5 system-ui,sans-serif; }
+.meeting-workflow[open] { display:flex; flex-direction:column; }
+.meeting-workflow::backdrop { background:#17122e45; }
+.workflow-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; padding:18px 20px 12px; border-bottom:1px solid var(--web-line,#e6e6ef); flex-shrink:0; }
+.workflow-heading h2 { margin:3px 0 0; font-size:21px; line-height:1.2; letter-spacing:-.03em; }
+.workflow-kicker { margin:0; color:var(--web-accent,#7047eb); font-size:10px; font-weight:700; letter-spacing:.09em; }
+.workflow-body { overflow-y:auto; min-height:0; padding:16px 20px 22px; overflow-wrap:anywhere; }
+.workflow-role { margin:0; font-size:14px; font-weight:600; }
+.workflow-meta,.workflow-help { margin:6px 0 14px; color:var(--web-muted,#686577); font-size:11px; }
+.workflow-progress { margin:8px 0; color:var(--web-accent,#7047eb); font-size:11px; font-weight:600; }
+.workflow-actions { display:flex; flex-wrap:wrap; gap:5px; padding-bottom:14px; }
+.workflow-button { box-sizing:border-box; padding:8px 11px; border:1px solid var(--web-line,#dedee9); border-radius:7px; color:var(--web-ink,#242331); background:var(--color-surface,#fff); font:inherit; font-size:12px; line-height:1.3; cursor:pointer; }
+.workflow-button:hover { background:var(--color-button-hover,#f4f1fc); }
+.workflow-button.primary,.workflow-button[aria-pressed=true] { background:var(--web-accent,#7047eb); color:white; border-color:transparent; }
+.workflow-button:disabled { opacity:.45; cursor:default; }
+.workflow-close { padding:2px 7px; border:0; font-size:24px; background:transparent; }
+.workflow-form { display:flex; flex-direction:column; gap:11px; }
+.workflow-form h3 { font-size:13px; margin:6px 0 0; }
+.workflow-field { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.workflow-field>span { font-size:11px; font-weight:600; color:var(--web-muted,#686577); }
+.workflow-field:has(input[type=checkbox]) { flex-direction:row-reverse; justify-content:flex-end; align-items:center; gap:8px; }
+.workflow-field input:not([type=checkbox]),.workflow-field textarea,.workflow-field select,.workflow-body>input { box-sizing:border-box; width:100%; min-width:0; padding:9px 10px; border:1px solid var(--web-line,#dedee9); border-radius:7px; background:var(--color-surface,#fff); color:var(--web-ink,#242331); font:inherit; font-size:12px; }
+.workflow-field textarea { resize:vertical; }
+.workflow-time-fields,.workflow-email-fields { display:grid; gap:11px; }
+.workflow-time-fields { grid-template-columns:1fr 1fr; }
+.meeting-workflow [hidden] { display:none!important; }
+.workflow-footer { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:7px; padding:12px 20px; border-top:1px solid var(--web-line,#dedee9); background:var(--color-surface,#fff); flex-shrink:0; }
+.workflow-error { color:#b42318; font-size:12px; }
+.workflow-notice { padding:9px 11px; color:#187653; background:#e8f6ef; border-radius:8px; }
+.workflow-application-list { display:grid; gap:8px; margin-top:12px; }
+.workflow-application-list button { display:flex; flex-direction:column; gap:3px; text-align:left; padding:12px; }
+.workflow-application-list small { color:var(--web-accent,#7047eb); }
+.workflow-button:focus-visible,.workflow-attention:focus-visible,.workflow-field :is(input,textarea,select):focus-visible { outline:2px solid var(--web-accent,#7047eb); outline-offset:2px; }
+#at-reference-dock dialog.meeting-workflow { margin:62px 12px 12px auto; max-height:calc(100dvh - 76px); font:13px/1.5 system-ui,sans-serif; }
+#at-reference-dock .meeting-workflow .workflow-button.primary,#at-reference-dock .meeting-workflow .workflow-button[aria-pressed=true] { color:#fff; }
+#at-reference-dock .workflow-heading,#at-reference-dock .workflow-body { padding-left:14px; padding-right:14px; }
+#at-reference-dock .workflow-heading h2 { font-size:18px; }
+#at-reference-dock .workflow-footer { padding:10px 14px; }
+#at-reference-dock .workflow-time-fields { grid-template-columns:1fr; }
+#dock-meetings .dock-meetings-back-row { display:flex; justify-content:space-between; align-items:center; }
+@media(max-width:450px) { .workflow-time-fields { grid-template-columns:1fr; } }

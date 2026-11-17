@@ -7,13 +7,13 @@ export function memoryStorage(initial = {}, changed, area) {
   return { values, async get(keys = null) { return structuredClone(keys == null ? values : Object.fromEntries((typeof keys === 'string' ? [keys] : keys).filter(key => key in values).map(key => [key,values[key]]))); },
     async set(input) { const changes = Object.fromEntries(Object.entries(input).map(([key,newValue]) => [key,{oldValue:values[key],newValue}])); Object.assign(values,structuredClone(input)); changed?.emit(changes,area); },async remove(key) { delete values[key]; } };
 }
-export async function dockFixture(t) {
+export async function dockFixture(t,{meetingSamples=[]}={}) {
   const changed = event(), storage = createStudioStorage({indexedDB:new IDBFactory(),BroadcastChannel:null}); t.after(() => storage.close());
   const candidate = { id:'candidate-1',revision:1,profile:{profileName:'Profile One'},document:{candidate:{id:'candidate-1',name:'Test Candidate'},applicationPreferences:{}} };
   let draft = { id:'draft',candidateId:candidate.id,revision:0,jobInputRaw:'',cvJsonRaw:'',coverLetterRaw:'',coverLetterEnabled:false,documentTemplate:{id:'rendercv-classic',version:1} };
   const tabs = [], sync = [], browser = {
-    runtime:{id:'dock-test',getURL:path => `chrome-extension://dock-test/${path}`,sendMessage:async () => ({ok:true})},
-    storage:{local:memoryStorage({appliedList:[{jobTitle:'Existing role',companyName:'Existing company',jobLink:'https://example.test/existing',companyLink:'https://example.test',date:new Date(2026,10,8).toString(),status:'applied',profileName:'Profile One',extra:'preserved'}]},changed,'local'),session:memoryStorage({},changed,'session'),onChanged:changed},
+    sampleData:{enabled:true},runtime:{id:'dock-test',getURL:path => `chrome-extension://dock-test/${path}`,sendMessage:async () => ({ok:true})},
+    storage:{local:memoryStorage({'meeting-mock-cards:v1':meetingSamples,'meeting-mock-cards:version':6,appliedList:[{jobTitle:'Existing role',companyName:'Existing company',jobLink:'https://example.test/existing',companyLink:'https://example.test',date:new Date(2026,10,8).toString(),status:'applied',profileName:'Profile One',extra:'preserved'},...meetingSamples]},changed,'local'),session:memoryStorage({},changed,'session'),onChanged:changed},
     windows:{getCurrent:async () => ({id:41,type:'normal'})},tabs:{query:async () => [],create:async input => { tabs.push(input); return {id:100,...input}; }},
   };
   const deps = { browser,storage,profiles:{bootstrap:async () => structuredClone(candidate),get:async id => id === candidate.id ? structuredClone(candidate) : null,select:async id => { if(id !== candidate.id) throw Error('Missing candidate'); }},

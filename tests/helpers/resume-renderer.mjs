@@ -1,11 +1,13 @@
+import {registerAIClipboard} from '../../extension/studio/ai-clipboard-offscreen.js';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
 import { IDBFactory } from 'fake-indexeddb';
 import { resumeSectionOrder, skillsFirstTemplate, layoutResumeParagraph } from '../../extension/studio/resume-layout.js';
+import {registerDocumentPreviewRenderer} from '../../extension/studio/document-preview-renderer.js';
 
 export async function resumeRenderer() {
-  const renderer = vm.createContext({ resumeSectionOrder, skillsFirstTemplate, layoutResumeParagraph,
+  const renderer = vm.createContext({ resumeSectionOrder, skillsFirstTemplate, layoutResumeParagraph,registerAIClipboard,registerDocumentPreviewRenderer,
     chrome:{runtime:{id:'layout-test',getURL:path=>`chrome-extension://layout-test/${path}`,onMessage:{addListener(){}}}},
     crypto:webcrypto,indexedDB:new IDBFactory(),Blob,DOMException,TextEncoder,TextDecoder,URL,console,atob,btoa,structuredClone,
     setInterval:()=>0,clearInterval(){},setTimeout,clearTimeout,document:{getElementById:()=>null} });
@@ -25,12 +27,12 @@ export async function resumeRenderer() {
           'Delivered reliable services and improved operational visibility across product teams by designing maintainable interfaces, strengthening automated checks, and working closely with engineers to identify production risks before release. Continuously refined deployment workflows and documentation to support consistent delivery.\nContinuation sentinel demonstrates that a new line aligns with the first word after the bullet.',
           'Led technical reviews and coordinated implementation work across frontend, backend, and infrastructure teams. Documented architectural decisions and improved incident response practices to keep complex changes understandable and sustainable.']}],education:[{degree:'Bachelor of Science in Computer Science'}]} };
   }
-  async function render(snapshot) {
+  async function render(snapshot,letter=null) {
     renderer.Mc(snapshot);
     const family=renderer.Rc.find(family=>family.id===snapshot.formattingOverrides.fontFamily);
     renderer.rawFonts=Object.fromEntries(await Promise.all([family.regular,family.bold].map(async face=>[face.key,await readFile(`extension/fonts/${face.file}`)])));
     renderer.fonts=vm.runInContext('Object.fromEntries(Object.entries(rawFonts).map(([key,value])=>[key,new Uint8Array(value)]))',renderer);
-    return renderer.dp(renderer.fonts,snapshot,null,'2026-11-08T18:00:00.000Z');
+    return renderer.dp(renderer.fonts,snapshot,letter,'2026-11-08T18:00:00.000Z');
   }
   function trace(snapshot) {
     const pages=[],text=[];

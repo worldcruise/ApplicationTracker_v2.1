@@ -5,7 +5,7 @@ export async function readCoverLetter(file, loadPdf = () => import('../pdfjs/pdf
   if (extension !== 'pdf') return file.text();
   const pdf = await loadPdf();
   pdf.GlobalWorkerOptions.workerSrc = new URL('../pdfjs/pdf.worker.min.mjs', import.meta.url).href;
-  const task = pdf.getDocument({data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false, useWasm: false});
+  const task = pdf.getDocument(pdfDocumentOptions(new Uint8Array(await file.arrayBuffer())));
   try {
     const document = await task.promise, pages = [];
     for (let number = 1; number <= document.numPages; number++) {
@@ -18,3 +18,4 @@ export async function readCoverLetter(file, loadPdf = () => import('../pdfjs/pdf
     return text;
   } finally { await task.destroy(); }
 }
+import {pdfDocumentOptions} from './pdf-options.js';
