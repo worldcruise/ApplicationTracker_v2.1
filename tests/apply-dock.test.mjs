@@ -90,6 +90,19 @@ test('bulk refill accepts answers to questions discovered after the initial auto
  await app.action(run,'rescan',{fieldKeys:[question.key],answers:{[question.key]:'My newly reviewed answer'}});await app.settled();assert.equal(input.value,'My newly reviewed answer');
 });
 
+test('explicit form-review edits replace committed answers once; later Autofill preserves new employer-page edits',async t=>{
+ const app=await applyFixture(t),employer=app.employer('<form><label>First name<input name="firstName"></label><label>Work arrangement<select name="arrangement"><option value="">Choose</option><option value="remote">Remote</option><option value="hybrid">Hybrid</option></select></label><fieldset><legend>Work authorization</legend><label><input type="radio" name="authorization" value="yes">Yes</label><label><input type="radio" name="authorization" value="no">No</label></fieldset></form>');
+ const job=await app.ready(await app.create());await app.start(job);await app.settled();const {run}=await app.request('DOCK_APPLY_STATE');
+ const doc=employer.page.document,select=doc.querySelector('select');select.value='remote';doc.querySelector('[value=yes]').checked=true;
+ const inspected=await app.request('DOCK_APPLY_INSPECT'),answers=Object.fromEntries(inspected.fields.map(field=>[field.key,field.label==='First name'?'Jordanette':field.label==='Work arrangement'?'hybrid':'no']));
+ await app.action(run,'rescan',{answers});await app.settled();
+ assert.equal(doc.querySelector('[name=firstName]').value,'Jordanette');assert.equal(select.value,'hybrid');assert.equal(doc.querySelector('[value=no]').checked,true);
+ doc.querySelector('[name=firstName]').value='Edited on page';select.value='remote';doc.querySelector('[value=yes]').checked=true;
+ await app.action(run,'rescan');await app.settled();
+ assert.equal(doc.querySelector('[name=firstName]').value,'Edited on page');assert.equal(select.value,'remote');assert.equal(doc.querySelector('[value=yes]').checked,true);
+ assert.ok(app.sent.filter(call=>call.message.action==='fill').at(-1).message.overwriteIds.length===0);
+});
+
 test('profile-only autofill works before documents are generated and saves only a confirmed submission',async t=>{
  const app=await applyFixture(t),employer=app.employer(),job=await app.create();
  await app.start(job);let run=await app.settled();

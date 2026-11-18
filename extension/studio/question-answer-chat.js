@@ -90,10 +90,13 @@ export function createQuestionAnswerChat(browser,{readPromptValues=async job=>jo
   const save=run=>browser.storage.session.set({[key(run.id)]:run});
   async function start(job,fields,windowId,conversationUrl){
     const activeId=(await browser.storage.session.get(active(windowId)))[active(windowId)],previous=activeId&&(await browser.storage.session.get(key(activeId)))[key(activeId)];
-    if(previous&&['sending','waiting'].includes(previous.phase)&&Date.now()-previous.createdAt<300000){if(previous.jobId===job.id&&previous.phase==='waiting')return {id:previous.id,phase:previous.phase,provider:previous.provider};throw Error('An AI answer batch is already running in this window.');}
     const writing=await readWritingPrompts(browser);
     const promptJob=/{{[^{}]+}}/.test(writing.autofill+'\n'+(job.input.autofillInstructions||''))?{...job,input:{...job.input,promptValues:await readPromptValues(job)}}:job;
     const provider=(await browser.storage.local.get('chatProvider')).chatProvider==='deepseek'?'deepseek':'chatgpt',id=crypto.randomUUID(),batch=answerBatchPrompt(promptJob,fields,id,writing);
+    if(previous&&['sending','waiting'].includes(previous.phase)&&Date.now()-previous.createdAt<300000){
+      if(previous.jobId===job.id&&previous.phase==='waiting'&&previous.provider===provider&&JSON.stringify(previous.questions)===JSON.stringify(batch.questions))return {id:previous.id,phase:previous.phase,provider:previous.provider};
+      throw Error('An AI answer batch is already running in this window. Finish that batch before selecting different questions.');
+    }
     const url=providerUrl(conversationUrl,provider,true)||providerHome(provider),tabs=await browser.tabs.query({windowId}),existing=tabs.find(tab=>tab.url===url&&url!==providerHome(provider));
     const tab=existing?await browser.tabs.update(existing.id,{active:true}):await browser.tabs.create({windowId,url,active:true});
     const run={id,jobId:job.id,windowId,tabId:tab.id,provider,kind:'application-answers',questions:batch.questions,phase:'sending',createdAt:Date.now(),sendIntentAt:Date.now(),outputFormat:'question-answer-objects'};

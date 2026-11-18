@@ -744,7 +744,8 @@
           }
           check(runId);
           const schoolQuery = combos.isSchoolInput(node) && normalize(node.value) === normalize(profileFieldAnswer(node, profile, fieldLabel(node)));
-          if (!node.isConnected || hasValue(node) && !schoolQuery || node.type === "radio" && controls().some((other) => sameRadioGroup(node, other) && other.checked)) continue;
+          const overwrite = node.type !== "file" && message.overwriteIds?.includes(key(node)) && Object.hasOwn(message.edits || {}, key(node));
+          if (!node.isConnected || !overwrite && (hasValue(node) && !schoolQuery || node.type === "radio" && controls().some((other) => sameRadioGroup(node, other) && other.checked))) continue;
           const documentField = /cover.?letter/i.test(label(node)) || node.type === "file" && /resume|\bcv\b/i.test(label(node));
           if (Array.isArray(message.selectedIds) && !message.selectedIds.includes(key(node)) && !documentField) continue;
           if (node.type === "file") {

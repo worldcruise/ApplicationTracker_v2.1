@@ -56,6 +56,7 @@ for(const provider of ['chatgpt','deepseek'])test(`${provider} answer runs send 
  const service=createQuestionAnswerChat(browser),started=await service.start(job,fields,41);assert.equal(started.provider,provider);assert.equal(sent,1);
  assert.equal((await service.status(started.id,41,job.id)).phase,'waiting');await assert.rejects(service.status(started.id,42,job.id),/different/);
  const recovered=createQuestionAnswerChat(browser);assert.equal((await recovered.start(job,fields,41)).id,started.id);assert.equal(sent,1);
+ await assert.rejects(recovered.start(job,fields.slice(0,1),41),/Finish that batch/);assert.equal(sent,1);
  complete=true;const result=await recovered.status(started.id,41,job.id);assert.equal(result.phase,'complete');assert.equal(result.answers.length,2);assert.equal(sent,1);
  assert.equal((await recovered.status(started.id,41,job.id)).phase,'complete');assert.equal(sent,1);
  const next=await recovered.start({...job,id:'job-2'},fields,41);tabs.delete(7);assert.equal((await recovered.status(next.id,41,'job-2')).phase,'error');assert.equal(sent,2);

@@ -149,7 +149,8 @@ export function createDockApplyService({browser,storage,profiles,records,renderS
         for(const frame of run.frames){if(!current(run,epoch))return;
           const selectedIds=documentsOnly?[]:run.selection?.filter(key=>key.startsWith(`${frame.documentId||frame.frameId}:`)).map(key=>key.slice(key.indexOf(':')+1));
           const edits=Object.fromEntries(run.fields.filter(field=>field.frameId===frame.frameId&&field.documentId===frame.documentId&&Object.hasOwn(run.drafts,field.key)).map(field=>[field.id,run.drafts[field.key]]));
-          scans.push({frame,result:await send(run,frame,'fill',{profile:run.profile,answers,selectedIds,edits,...documents},epoch)});
+          const overwriteIds=documentsOnly?[]:run.fields.filter(field=>field.frameId===frame.frameId&&field.documentId===frame.documentId&&run.overwriteFields?.includes(field.key)).map(field=>field.id);
+          scans.push({frame,result:await send(run,frame,'fill',{profile:run.profile,answers,selectedIds,edits,overwriteIds,...documents},epoch)});
         }
         if(current(run,epoch))merge(run,scans);
       }
@@ -288,6 +289,7 @@ export function createDockApplyService({browser,storage,profiles,records,renderS
       const latest=run.profileOnly?await profileApplication(await target(run)):await applicationJob(run.jobId,sender);run.profile=structuredClone(latest.candidate.profile);run.candidateRevision=latest.candidate.revision;run.job=structuredClone(latest.job);run.inputRevision=latest.job.inputRevision;run.resumeVersion=latest.job.resume?.version??null;
       run.customAnswers=structuredClone(latest.candidate.document?.customAnswers||[]);
       run.trackingOnly=false;run.selection=Array.isArray(payload.fieldKeys)?payload.fieldKeys.slice(0,500):null;
+      run.overwriteFields=payload.answers&&typeof payload.answers==='object'?Object.keys(payload.answers).slice(0,500):[];
       if(payload.answers&&typeof payload.answers==='object')for(const [key,value]of Object.entries(payload.answers).slice(0,500))if(typeof value==='string')run.drafts[key]=value.slice(0,10000);
       run.epoch=(run.epoch||0)+1;run.phase='filling';run.message='Scanning the employer form…';await save(run);launch(run,true);return;
     }
@@ -366,6 +368,7 @@ export function createDockApplyService({browser,storage,profiles,records,renderS
         phase:'filling',epoch:0,step:'autofill',message:'Scanning the employer form…',tabId:tab.id,targetUrl:tab.url||tab.pendingUrl,fields:[],questions:[],frames:[],drafts:{},options,recordMutationId:crypto.randomUUID()};
       next.customAnswers=structuredClone(candidate.document?.customAnswers||[]);next.optionOverrides=Object.fromEntries(Object.keys(defaults).filter(key=>typeof payload.options?.[key]==='boolean').map(key=>[key,payload.options[key]]));
       next.selection=Array.isArray(payload.fieldKeys)?payload.fieldKeys.slice(0,500):null;
+      next.overwriteFields=payload.answers&&typeof payload.answers==='object'?Object.keys(payload.answers).slice(0,500):[];
       if(payload.answers&&typeof payload.answers==='object')for(const [key,value]of Object.entries(payload.answers).slice(0,500))if(typeof value==='string')next.drafts[key]=value.slice(0,10000);
       // A manually selected form is also an explicit application entry point.
       initializeTracking(next);next.trackingOnly=tracking;

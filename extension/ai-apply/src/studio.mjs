@@ -734,11 +734,11 @@ export function createStudio({ openDialog, showStudio, showChat, syncChat = asyn
       if (url) showChat(url);
     }
     if (button.dataset.action === 'preview') {
-      if(button.closest('#apply-panel'))void perform(()=>previewOnPage(request,'resume'),`preview-resume:${request.id}`);
+      if(button.closest('#apply-panel, #resume-queue'))void perform(()=>previewOnPage(request,'resume'),`preview-resume:${request.id}`);
       else void preview(request);
     }
     if (button.dataset.action === 'cover-letter' && request.coverLetterEnabled && request.coverLetter?.trim()) {
-      if(button.closest('#apply-panel'))void perform(()=>previewOnPage(request,'cover-letter'),`preview-cover-letter:${request.id}`);
+      if(button.closest('#apply-panel, #resume-queue'))void perform(()=>previewOnPage(request,'cover-letter'),`preview-cover-letter:${request.id}`);
       else void previewCoverLetter(request);
     }
     if (button.dataset.action === 'documents') documents.open(request.id);
