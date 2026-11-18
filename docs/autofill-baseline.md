@@ -9,6 +9,7 @@ The dock's Apply to Job workspace has one Autofill button. It starts filling dir
 - While filling, the button is disabled and reads Filling. An interrupted run can be resumed with the same button; another employer tab can take over an old run.
 - The button reads Submitting while the existing submission observers await confirmation, then Submitted after confirmation. Submission disables filling for that application. Changing to another employer page re-enables Autofill.
 - Errors and status details are available in the button's tooltip instead of separate helper messages. Idle UI updates read the run status without scanning or rendering a second copy of the employer's form.
+- Autofill does not inject progress or status notifications onto employer pages.
 
 ## Engine and submission ownership
 
