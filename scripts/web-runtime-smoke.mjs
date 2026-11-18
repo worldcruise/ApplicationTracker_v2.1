@@ -52,6 +52,18 @@ try{
     for(let attempt=0;attempt<100&&!document.querySelector('[data-test=applications-board-column-applied] .application-status-tag');attempt++)await delay(10);
     assert(document.querySelector('[data-test=applications-board]'),'Application board missing');assert(document.querySelector('[data-test=applications-board-column-applied] .application-status-tag')?.textContent==='Applied','An application was rendered as a pending meeting');
   }
+  if(action==='application-transfer'){
+    const button=label=>[...document.querySelectorAll('.application-manage-menu button')].find(node=>node.textContent===label);
+    assert(button('Import')&&button('Export'),'Applications Manage is missing import or export');
+    let exported,filename;URL.createObjectURL=blob=>{exported=blob;return'blob:test-export';};URL.revokeObjectURL=()=>{};page.HTMLAnchorElement.prototype.click=function(){filename=this.download;};
+    button('Export').click();await delay(30);
+    const full=document.querySelector('[aria-label="Export the application data"]');assert(full&&!full.checked,'Full application export must be opt-in');
+    full.click();document.querySelector('[aria-label="Select all shown records"]').click();document.querySelector('.record-export-confirm').click();await delay(30);
+    assert(filename?.endsWith('.json'),'Full application export did not download JSON');const data=JSON.parse(await exported.text());assert(data.applications[0].status==='applied'&&data.applications[0].created_at,'Full export lost status or created_at');
+    button('Import').click();await delay(20);const file=document.querySelector('.queue-import-dialog input[type=file]');assert(file?.accept.includes('.json'),'Applications importer does not accept JSON');document.querySelector('.queue-import-dialog .record-delete-close').click();
+    document.querySelector('[data-record-view=cards]').click();await delay(80);assert(button('Import')&&button('Export'),'Card view has no import/export');
+    document.querySelector('[data-record-view=board]').click();await delay(100);assert(button('Import')&&button('Export'),'Board view has no import/export');
+  }
   if(action==='calendar-ranges'){
     assert(document.querySelector('.meeting-calendar-view'),'Calendar missing');
     const controls=[...document.querySelectorAll('button')];for(const label of ['Day','Week','Month'])assert(controls.some(button=>button.textContent.trim()===label),label+' calendar control missing');

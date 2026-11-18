@@ -19,6 +19,8 @@ The extension uses one service worker, one web application, and Chrome's native 
 
 Applications save locally through `dock-records-service.js`. Submission observation records confirmed applications once. Autofill requires a user action. Employer Apply, Next, and Submit controls are observed rather than clicked by the extension.
 
+Applications and Job Queue expose Import and Export through Manage in the web app and native dock. Basic exports contain only company, role, application link, salary, and JD as CSV. Applications additionally offer **Export the application data**, unchecked by default: this writes versioned JSON with saved resume CV/snapshot, cover letter, status, `created_at`, update date, notes, conversation link, and record history. Application import accepts both formats; CSV creates Applied records using the current creation time, while full JSON preserves the saved dates, documents, and status. Existing application/queue URLs and repeated rows are skipped. Imports report imported, skipped, and failed counts without overwriting existing records; full imports do not replace the single profile. Full JSON supports up to 1,000 records and 50 MB per import.
+
 Resume imports and address lookup use their existing endpoints through small, dedicated clients. They do not initialize an account SDK, remote application sync, subscriptions, referral tracking, or background authentication refresh.
 
 The original SpeedyApply background application, generic injected application, popup, obsolete web bundles, in-page dock, local resume extraction rules, and unused profile/queue controls have been removed. Mock generators live in `tests/fixtures` and are excluded from the extension package.

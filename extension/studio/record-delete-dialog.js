@@ -3,7 +3,7 @@ import {withRequestDeadline} from './request-deadline.js';
 import {downloadRecordsCsv} from './record-export.js';
 
 export function openRecordDeletion(host,options={}){return openRecordSelection(host,{...options,mode:'delete'});}
-export function openRecordExport(host,options={}){if(options.type&&options.type!=='queue')return Promise.reject(Error('Export is available for Job Queues only.'));return openRecordSelection(host,{...options,type:'queue',mode:'export'});}
+export function openRecordExport(host,options={}){return openRecordSelection(host,{...options,type:options.type||'queue',mode:'export'});}
 async function openRecordSelection(host,{type='applications',mode,browser=globalThis.chrome,onDeleted=()=>{},onExport=downloadRecordsCsv}={}){
   const exporting=mode==='export',verb=exporting?'Export':'Delete';
   const doc=host.ownerDocument||host,el=(tag,text,className)=>{const node=doc.createElement(tag);if(text!=null)node.textContent=text;if(className)node.className=className;return node;};
@@ -16,6 +16,9 @@ async function openRecordSelection(host,{type='applications',mode,browser=global
   const header=el('header'),title=el('h2',`${verb} ${type==='queue'?'queue jobs':'applications'}`);title.id=`record-${mode}-title`;
   const close=el('button','\u00d7','record-delete-close');close.type='button';close.setAttribute('aria-label',`Close ${exporting?'export':'deletion'} dialog`);header.append(title,close);
   const help=el('p',`Choose records to ${mode}, newest first. Select all shown or Shift-click checkboxes to select a range.${exporting?' CSV includes only Company, Role, JD, Salary, and Application link.':''}`,'record-delete-help');
+  const fullLabel=el('label',null,'record-export-options'),full=el('input');full.type='checkbox';full.setAttribute('aria-label','Export the application data');
+  fullLabel.append(full,doc.createTextNode('Export the application data'));
+  const fullHelp=el('p','Includes resume CV, cover letter, status, created_at, and saved application details in JSON. Leave off for the five job fields in CSV.','record-delete-help');
   const filters=el('div',null,'record-delete-filters');
   function field(label,control){const wrapper=el('label');wrapper.append(el('span',label),control);filters.append(wrapper);return control;}
   const period=field('Period',el('select'));period.setAttribute('aria-label',exporting?'Export period':'Deletion period');
@@ -29,6 +32,7 @@ async function openRecordSelection(host,{type='applications',mode,browser=global
   const error=el('p',null,'record-delete-error');error.setAttribute('role','alert');error.hidden=true;
   const footer=el('footer'),cancel=el('button','Cancel','web-button'),remove=el('button',`${verb} selected`,`web-button record-${mode}-confirm`);cancel.type=remove.type='button';footer.append(cancel,remove);
   dialog.append(header,help,filters,search,selection,scroll,empty,error,footer);host.append(dialog);
+  if(exporting&&type==='applications'){filters.before(fullLabel,fullHelp);full.onchange=()=>{help.textContent=`Choose records to export, newest first. Select all shown or Shift-click checkboxes to select a range. ${full.checked?'Full application data will be exported as JSON.':'CSV includes only Company, Role, JD, Salary, and Application link.'}`;};}
   let visible=[],selected=new Set(),busy=false,lastIndex=null;
   function sync(){
     from.disabled=to.disabled=busy||period.value!=='custom';
@@ -61,7 +65,7 @@ async function openRecordSelection(host,{type='applications',mode,browser=global
     if(busy||!selected.size)return;busy=true;error.hidden=true;const targets=visible.filter(record=>selected.has(record.id));
     dialog.querySelectorAll('input,select,button').forEach(control=>control.disabled=true);sync();
     try{
-      if(exporting)await onExport(targets,{type,document:doc});
+      if(exporting)await onExport(targets,{type,document:doc,...type==='applications'?{includeApplicationData:full.checked}:{}});
       else{const next=await request('DOCK_RECORDS_MUTATE',{action:'delete-selected',type,records:targets.map(({id,revision})=>({id,revision})),mutationId:crypto.randomUUID()});await onDeleted(next,targets.length);}
       dialog.close();
     }

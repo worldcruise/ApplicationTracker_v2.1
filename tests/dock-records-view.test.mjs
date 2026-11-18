@@ -85,7 +85,7 @@ test('Delete opens a date-filtered selection dialog for queue jobs and applicati
   await app.click('.record-delete-close');assert.equal(app.$('#jr-app-count').textContent,'1');
 });
 
-test('Manage offers import and export only for queues, closes on Escape, and opens the export picker',async t=>{
+test('Manage offers import and export for queue jobs and applications, closes on Escape, and opens the export picker',async t=>{
   const app=await view(t);await app.create();
   await app.api.show('queue');await app.click('[data-command="manage"]');
   assert.deepEqual([...app.$('.jr-manage-menu').querySelectorAll('[role=menuitem]')].filter(button=>!button.hidden).map(button=>button.textContent),['Add','Import','Export','Delete']);
@@ -94,7 +94,7 @@ test('Manage offers import and export only for queues, closes on Escape, and ope
   assert.equal(app.$('.jr-manage-menu').hidden,true);assert.equal(app.$('.record-delete-dialog h2').textContent,'Export queue jobs');
   assert.equal(app.$('[aria-label="Export period"]').value,'24hours');assert.equal(app.$('.record-export-confirm').disabled,true);await app.click('.record-delete-close');
   await app.api.show('applications');await app.click('[data-command="manage"]');
-  assert.deepEqual([...app.$('.jr-manage-menu').querySelectorAll('[role=menuitem]')].filter(button=>!button.hidden).map(button=>button.textContent),['Add','Delete']);
+  assert.deepEqual([...app.$('.jr-manage-menu').querySelectorAll('[role=menuitem]')].filter(button=>!button.hidden).map(button=>button.textContent),['Add','Import','Export','Delete']);
   const saved=await app.request('DOCK_RECORDS_STATE');assert.equal(saved.jobs.length,1);assert.equal(saved.applications.length,1);
 });
 
@@ -329,7 +329,7 @@ test('actual dock entry point switches to the workspace and back without navigat
     assert.equal(page.document.querySelector('.jr-tabs').hidden,true,'Applications no longer exposes a queue tab');
     assert.equal(page.document.querySelector('.jr-header h2').textContent,'Applications');
     page.document.querySelector('[data-command="manage"]').click();
-    assert.deepEqual([...page.document.querySelectorAll('.jr-manage-menu [role=menuitem]')].filter(button=>!button.hidden).map(button=>button.textContent),['Add','Delete']);
+    assert.deepEqual([...page.document.querySelectorAll('.jr-manage-menu [role=menuitem]')].filter(button=>!button.hidden).map(button=>button.textContent),['Add','Import','Export','Delete']);
     page.document.querySelector('[data-command="dashboard"]').click();await until(()=>!page.document.querySelector('.rd-main').hidden);
     page.document.querySelector('[data-action="Apply to Job"]').click();await until(()=>page.document.querySelector('#at-reference-dock').dataset.dockView==='apply');
     const frame=page.document.querySelector('.dock-ai-apply-frame');assert.ok(frame);assert.equal(page.document.querySelector('#apply-ready-queue-design'),null);

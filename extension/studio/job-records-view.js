@@ -223,7 +223,7 @@ export function mountJobRecords(host, { browser = globalThis.chrome, onDashboard
     const actionRow=applications||searchQueue?searchRow:toolbar;
     if(manage.parentElement!==actionRow)actionRow.append(manage,refreshButton);
     addButton.setAttribute('aria-label',applications?'Add application':'Add job manually');
-    $('[data-command="export-records"]').hidden=applications;$('[data-command="import-records"]').hidden=applications;
+    $('[data-command="export-records"]').hidden=false;$('[data-command="import-records"]').hidden=false;
     $('#jr-app-count').textContent = String(data.applications.length); $('#jr-queue-count').textContent = String(data.jobs.length);
     for (const tab of ['applications','queue']) { const selected = state.tab === tab; $(`[data-tab="${tab}"]`).setAttribute('aria-selected',String(selected)); $(`[data-tab="${tab}"]`).tabIndex = selected ? 0 : -1; }
     $('#jr-main-panel').setAttribute('aria-labelledby',state.tab === 'queue' ? 'jr-tab-queue' : 'jr-tab-applications');
@@ -239,8 +239,8 @@ export function mountJobRecords(host, { browser = globalThis.chrome, onDashboard
   }
   async function command(name, record) {
     if (name === 'refresh') { data = await request('DOCK_RECORDS_STATE'); render(true); return; }
-    if(name==='export-records'&&state.tab==='queue'){deletionDialog=await openRecordExport(root,{type:'queue',browser,onExport:(targets,options)=>{const result=downloadRecordsCsv(targets,options);show(`Exported ${result.count} queue jobs.`);return result;}});return;}
-    if(name==='import-records'&&state.tab==='queue'){deletionDialog=openQueueImport(root,{browser,onImported:(next,message)=>{data=next;render(true);show(message);}});return;}
+    if(name==='export-records'){deletionDialog=await openRecordExport(root,{type:state.tab,browser,onExport:(targets,options)=>{const result=downloadRecordsCsv(targets,options);show(`Exported ${result.count} ${state.tab==='queue'?'queue jobs':'applications'}.`);return result;}});return;}
+    if(name==='import-records'){deletionDialog=openQueueImport(root,{type:state.tab,browser,onImported:(next,message)=>{data=next;render(true);show(message);}});return;}
     if (name === 'delete-records') {
       deletionDialog=await openRecordDeletion(root,{type:state.tab,browser,onDeleted:async(next,count)=>{
         data=next;state.selected=null;state.editing=false;state.deleted=null;

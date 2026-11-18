@@ -312,6 +312,8 @@ html[data-theme] #at-reference-dock .rd-stat-meetings[data-needs-action=true] sv
 .record-delete-search { width:100%; }
 .record-delete-selection { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin:15px 0 10px; font-size:12px; }
 .record-delete-selection label { display:flex; gap:7px; align-items:center; }
+.record-delete-dialog .record-export-options { display:flex; align-items:center; gap:8px; margin:14px 0 6px; font-weight:600; }
+.record-delete-dialog .record-export-options input { width:16px; height:16px; min-height:0; margin:0; accent-color:var(--color-accent); flex:none; }
 .record-delete-dialog input[type=checkbox] { width:15px; height:15px; accent-color:var(--color-accent); cursor:pointer; }
 .record-delete-table-scroll { overflow:auto; max-height:43dvh; border:1px solid var(--color-line); border-radius:8px; }
 .record-delete-dialog table { width:100%; border-collapse:collapse; text-align:left; font-size:12px; }

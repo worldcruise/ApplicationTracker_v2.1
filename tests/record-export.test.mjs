@@ -46,7 +46,15 @@ test('export picker supports Shift-click range selection, clears hidden selectio
   assert.equal(dialog.isConnected,false);assert.deepEqual(records,original);assert.deepEqual(requests.map(request=>request.operation),['DOCK_RECORDS_STATE']);
 });
 
-test('application export is unavailable',async()=>{await assert.rejects(openRecordExport(null,{type:'applications'}),/Job Queues only/);});
+test('application export offers an unchecked full-data option and retains the date and range picker',async t=>{
+  const page=new Window();t.after(()=>page.happyDOM.abort());let exported;
+  const record={id:'application',company:'Company',role:'Engineer',createdAt:new Date().toISOString(),status:'interview'};
+  const browser={runtime:{sendMessage:async()=>({ok:true,result:{applications:[record],jobs:[]}})}};
+  const dialog=await openRecordExport(page.document.body,{type:'applications',browser,onExport:(rows,options)=>{exported={rows,options};}});
+  assert.equal(dialog.querySelector('[aria-label="Export the application data"]').checked,false);assert.equal(dialog.querySelector('select').value,'24hours');
+  dialog.querySelector('[aria-label="Export the application data"]').click();dialog.querySelector('tbody input').click();dialog.querySelector('.record-export-confirm').click();await delay(0);
+  assert.equal(exported.options.includeApplicationData,true);assert.equal(exported.options.type,'applications');assert.deepEqual(exported.rows,[record]);assert.equal(dialog.isConnected,false);
+});
 
 test('failed export retains the selection and allows retry without deleting anything',async t=>{
   const page=new Window();t.after(()=>page.happyDOM.abort());let attempts=0;

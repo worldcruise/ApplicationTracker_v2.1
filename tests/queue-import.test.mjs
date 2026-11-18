@@ -26,7 +26,7 @@ test('queue import skips saved jobs, submitted applications and duplicate file r
   f.restart();const retry=await f.request('DOCK_RECORDS_MUTATE',payload);assert.deepEqual(retry.importReport,result.importReport);assert.equal(retry.jobs.length,3);
   const again=await f.request('DOCK_RECORDS_MUTATE',{...payload,mutationId:crypto.randomUUID()});assert.equal(again.importReport.imported,0);assert.equal(again.importReport.skipped,5);assert.equal(again.jobs.length,3);
   assert.equal(queueImportMessage(result.importReport),'Imported 2 jobs. Skipped 3 duplicates. 2 could not be imported.');
-  await assert.rejects(f.request('DOCK_RECORDS_MUTATE',{...payload,type:'applications',mutationId:crypto.randomUUID()}),{code:'INVALID_REQUEST'});
+  const applications=await f.request('DOCK_RECORDS_MUTATE',{...payload,type:'applications',mutationId:crypto.randomUUID()});assert.equal(applications.importReport.imported,1);assert.equal(applications.importReport.skipped,5);assert.equal(applications.importReport.failed,1);
 });
 
 test('re-importing an exported queue skips every existing row without changing documents',async t=>{

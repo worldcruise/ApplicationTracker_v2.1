@@ -1,8 +1,8 @@
-import {createUseWorkspaceSummary,navigateWorkspace} from './workspace-summary.js';
+import {createUseWorkspaceSummary} from './workspace-summary.js';
 import {createApplicationRecordUI} from './application-record-ui.js';
 import {createApplicationFilters} from './application-filters.js';
 import {matchesApplicationDate} from './application-filter-model.js';
-import {openRecordDeletion} from './record-delete-dialog.js';
+import {createApplicationsManage} from './applications-manage.js';
 import {projectMeetingRecords} from './meeting-model.js';
 
 const raw=record=>({...record,companyName:record.companyName||record.company,jobTitle:record.jobTitle||record.role,jobLink:record.jobLink||record.url,appliedAt:record.createdAt||record.date,date:record.createdAt||record.date});
@@ -13,7 +13,7 @@ function matches(row,filters,meeting=false){
 }
 export function createApplicationsPage(React){
   const h=React.createElement,useSummary=createUseWorkspaceSummary(React),UI=createApplicationRecordUI(React),Context=React.createContext(null);
-  function Manage(){const [error,setError]=React.useState('');return h('div',{className:'application-manage'},h('details',null,h('summary',{className:'web-button'},'Manage'),h('div',{className:'application-manage-menu'},h('button',{type:'button',onClick:()=>navigateWorkspace('/?add=1')},'+ Add'),h('button',{type:'button',onClick:()=>void openRecordDeletion(document.body).catch(reason=>setError(reason.message))},'Delete'))),error&&h('p',{role:'alert'},error));}
+  const Manage=createApplicationsManage(React);
   const Filters=createApplicationFilters(React,{useApplications:()=>React.useContext(Context),Manage});
   return function ApplicationsPage({view='list'}){
     const {state,error}=useSummary(),[filters,setFilters]=React.useState({query:'',status:'all',period:'all',view});
@@ -28,12 +28,13 @@ export function createApplicationsPage(React){
 
 export function createMeetingBoard(React){
   const h=React.createElement,useSummary=createUseWorkspaceSummary(React),Context=React.createContext(null),UI=createApplicationRecordUI(React);
-  const Filters=createApplicationFilters(React,{useApplications:()=>React.useContext(Context),Manage:()=>null});
+  const Manage=createApplicationsManage(React);
+  const Filters=createApplicationFilters(React,{useApplications:()=>React.useContext(Context),Manage:()=>React.useContext(Context).manageApplications?h(Manage):null});
   return function MeetingBoard({view='board',boardOnly=false,meetingDetails={},meetingSort,meetingTimezone,columnGroups,renderMeetingView,renderMeetingCard,filterTrailingControl}){
     const {state,error}=useSummary(),[filters,setFilters]=React.useState({query:'',status:'all',period:'all',view});
     const sources=state?.meetings.sourceRecords||[],allRecords=projectMeetingRecords(sources,meetingDetails).map(raw),records=allRecords.filter(row=>(boardOnly||row.status!=='applied')&&matches(row,{...filters,timezone:meetingTimezone},true)).sort(meetingSort);
     if(boardOnly)columnGroups=[{id:'active',statuses:['applied','screen','interview']},{id:'closed',statuses:['rejected','archived']},{id:'offers',statuses:['offer']}];
-    const app={filters,onFiltersChange:setFilters,allowedStatuses:STAGES.map(([value])=>value),statusLabels:{archived:'Failed'}};
+    const app={filters,onFiltersChange:setFilters,allowedStatuses:STAGES.map(([value])=>value),statusLabels:{archived:'Failed'},manageApplications:boardOnly};
     return h(Context.Provider,{value:app},h(React.Fragment,null,h(Filters,{trailingControl:filterTrailingControl}),error&&h('p',{role:'alert'},error),
       view!=='board'?renderMeetingView({records,allRecords,sourceRecords:sources,filters}):h('div',{'data-test':'applications-board','data-board-only':String(boardOnly)},...(columnGroups||[{id:'all',statuses:STAGES.map(([id])=>id)}]).map(group=>h('section',{key:group.id,className:'meeting-column-group','data-group':group.id},h('div',{className:'meeting-group-columns'},...STAGES.filter(([id])=>group.statuses.includes(id)).map(([status,label])=>h('section',{key:status,'data-test':`applications-board-column-${status}`},h('div',null,h('h2',null,label),h('span',null,records.filter(row=>row.status===status).length)),h('div',null,...records.filter(row=>row.status===status).map(row=>h('div',{key:row.id,'data-test':'applications-board-card'},row.status==='applied'?h('article',{className:'application-card'},h(UI.Main,{record:row}),h(UI.Status,{record:row})):renderMeetingCard(row,allRecords))))))))))));
   };

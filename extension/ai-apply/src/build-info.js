@@ -1,2 +1,2 @@
 // Generated identity for the integrated Apply to Job runtime.
-globalThis.AiAgentBuild = Object.freeze({"id":"e6a24ad64dd4801f9c1cb15ef7f48a7b7abc720dd639a7fa034db646d32f18ae","version":"2.1.30"});
+globalThis.AiAgentBuild = Object.freeze({"id":"c485f18f3698ef8519abb7b95896b92896ba7a8a09f6cb1d5c9bd1ffdf22b265","version":"2.1.31"});

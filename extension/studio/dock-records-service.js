@@ -8,6 +8,7 @@ import {aiQueueState,nativeResume} from './ai-apply-model.js';
 import {isJobReady} from '../ai-apply/src/job-readiness.mjs';
 import {meetingSourceRows} from './dock-meetings-data.js';
 import {sameApplicationUrl} from '../ai-apply/src/application-identity.mjs';
+import {applicationImportKey,importedApplicationData,APPLICATION_TRANSFER_MAX_BYTES} from './application-transfer.js';
 
 export const DOCK_RECORD_OPERATIONS = ['DOCK_RECORDS_STATE', 'DOCK_RECORDS_DOCUMENT_PREVIEW', 'DOCK_RECORDS_MUTATE', 'DOCK_RECORDS_STUDIO', 'DOCK_RECORDS_RESUME','DOCK_RECORDS_OPEN_RESUME','DOCK_RECORDS_CV_INPUT'];
 export const APPLICATION_STAGES = ['applied', 'screen', 'interview', 'offer', 'rejected', 'archived'];
@@ -64,11 +65,11 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
       const base = identity(record), occurrence = seen.get(base) || 0; seen.set(base, occurrence + 1);
       const alias = `${base}:${occurrence}`, linked = anchors.get(anchor(record)) === 1 ? Object.entries(saved.applications).find(([,meta]) => meta.sourceAnchor === anchor(record))?.[0] : null;
       const id = saved.aliases[alias] || linked || alias, meta = saved.applications[id] || {},resume=meta.resume||record.resume||null;
-      return { id, type: 'applications', workflowApplicationId:workflowIds[index], revision: `${meta.revision || 0}:${hash(signature(record))}`, candidateId: meta.candidateId || meta.resume?.snapshot?.candidate?.id || null,
+      return { id, type: 'applications', workflowApplicationId:workflowIds[index], revision: `${meta.revision || 0}:${hash(signature(record))}`, candidateId: meta.candidateId || record.candidateId || meta.resume?.snapshot?.candidate?.id || null,
         candidateName: meta.candidateName || record.profileName || 'Saved profile', company: record.companyName || 'Company not provided', role: record.jobTitle || 'Untitled role',
         url: safeJobUrl(record.jobLink), status: String(record.status || 'applied').toLowerCase().replace('screening','screen').replace('failed','archived'),
-        createdAt: isoRecordDate(meta.createdAt,record.createdAt,record.date), updatedAt: [meta.updatedAt,record.updatedAt,record.date].map(value=>isoRecordDate(value)).filter(Boolean).sort().at(-1), salary:meta.salary??record.salary??'',notes: meta.notes ?? record.notes ?? '', description: meta.description??record.description??record.jobDescription??'', conversationUrl: meta.conversationUrl || '',
-        resume, coverLetterRaw:meta.coverLetterRaw??resume?.coverLetterRaw??'',coverLetterEnabled:meta.coverLetterEnabled??!!resume?.coverLetterEnabled,events: meta.events || [{ label: 'Application recorded', at: record.date }],
+        createdAt: isoRecordDate(meta.createdAt,record.createdAt,record.date), updatedAt: [meta.updatedAt,record.updatedAt,record.date].map(value=>isoRecordDate(value)).filter(Boolean).sort().at(-1), salary:meta.salary??record.salary??'',notes: meta.notes ?? record.notes ?? '', description: meta.description??record.description??record.jobDescription??'', conversationUrl: meta.conversationUrl || record.conversationUrl || '',
+        resume, coverLetterRaw:meta.coverLetterRaw??record.coverLetterRaw??resume?.coverLetterRaw??'',coverLetterEnabled:meta.coverLetterEnabled??record.coverLetterEnabled??!!resume?.coverLetterEnabled,events: meta.events || record.events || [{ label: 'Application recorded', at: record.date }],
         sourceIndex: index, alias };
     }).filter(Boolean);
   }
@@ -157,7 +158,10 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
   async function mutate(saved, payload) {
     const action = payload.action;
     if (typeof payload.mutationId !== 'string' || !payload.mutationId || payload.mutationId.length > 128) fail('INVALID_REQUEST', 'A mutation ID is required.');
-    const requestSignature = JSON.stringify(payload);
+    const serializedRequest=JSON.stringify(payload);
+    const requestSignature=action==='import'&&payload.type==='applications'
+      ?'applications:sha256:'+Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(serializedRequest))),byte=>byte.toString(16).padStart(2,'0')).join('')
+      :serializedRequest;
     if (saved.receipts[payload.mutationId]) {
       const receipt = saved.receipts[payload.mutationId];
       if (receipt.signature !== requestSignature) fail('MUTATION_CONFLICT', 'This operation ID was already used for different content.');
@@ -185,6 +189,31 @@ export function createDockRecordsService({ browser, storage, profiles, drafts, p
         promptTemplateId: templateId, promptSnapshot: structuredClone(library.templates.find(item => item.id === templateId) || library.templates.find(item => item.id === library.selectedId)),
         status: 'Queued', revision: 1, inputRevision: 1, attempt: 0, resume: null, resumeHistory: [], createdAt: now(), updatedAt: now(), events: [{ label: 'Job added to queue', at: now() }] };
       saved.jobs.unshift(record); selectedId = record.id;
+    } else if(action==='import'&&payload.type==='applications'){
+      if(!Array.isArray(payload.rows)||!payload.rows.length||payload.rows.length>1000||new TextEncoder().encode(JSON.stringify(payload.rows)).length>APPLICATION_TRANSFER_MAX_BYTES)fail('INVALID_REQUEST','Import up to 1,000 applications, no larger than 50 MB.');
+      const candidate=await profiles.bootstrap();if(!candidate)fail('CANDIDATE_REQUIRED','Create a profile in Settings before importing applications.');
+      const raw=await rawApplications(),current=applications(saved,raw),known=new Set(current.map(applicationImportKey));
+      for(const queued of saved.jobs.filter(job=>!job.deletedAt&&job.candidateId===candidate.id))known.add(applicationImportKey(queued));
+      const added=[];importReport={imported:0,skipped:0,failed:0,errors:[]};
+      for(const [index,input]of payload.rows.entries()){
+        try{
+          if(input&&typeof input==='object'&&known.has(applicationImportKey(input))){importReport.skipped++;continue;}
+          const data=importedApplicationData(input,{now:now(),validateResume});
+          const jobLink=input.url?url(input.url):input.fullApplication===true?'':url(input.url);
+          const fields={company:text(input.company,300,'a company name',true),role:text(input.role,500,'a role',true),url:jobLink,
+            description:text(input.description||'',160000,'a job description'),salary:text(input.salary||'',200,'a salary')};
+          const duplicate=applicationImportKey({...fields,createdAt:data.createdAt});if(known.has(duplicate)){importReport.skipped++;continue;}
+          const entry={id:crypto.randomUUID(),jobTitle:fields.role,companyName:fields.company,jobLink,companyLink:jobLink?new URL(jobLink).origin:'',
+            candidateId:candidate.id,profileName:candidate.profile.profileName||candidate.document.candidate.name,...data,
+            description:fields.description,salary:fields.salary,notes:input.fullApplication===true?text(input.notes||'',10000,'notes'):'',
+            conversationUrl:input.fullApplication===true&&input.conversationUrl?url(text(input.conversationUrl,2048,'an AI conversation URL'),'a valid AI conversation URL'):'',date:data.createdAt};
+          added.push(entry);known.add(duplicate);importReport.imported++;
+        }catch(error){if(!error.code)throw error;importReport.failed++;if(importReport.errors.length<20)importReport.errors.push({row:index+2,message:error.message});}
+      }
+      // Store each imported application and its documents together. Existing
+      // records and queue jobs are never replaced by an import.
+      if(added.length)await browser.storage.local.set({appliedList:[...added,...raw]});
+      selectedId=null;
     } else if(action==='import'){
       if(payload.type!=='queue'||!Array.isArray(payload.rows)||!payload.rows.length||payload.rows.length>1000)fail('INVALID_REQUEST','Import up to 1,000 rows into Job Queues.');
       const candidate=await profiles.bootstrap();if(!candidate)fail('CANDIDATE_REQUIRED','Create a profile in Settings before importing jobs.');
