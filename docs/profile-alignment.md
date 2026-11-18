@@ -5,6 +5,18 @@ structure used by SpeedyApply 2.28.2. Resume Studio no longer stores a second
 candidate document as the source of autofill facts. Its existing renderer receives
 a temporary projection from `studio/profile-model.js`.
 
+The canonical profile also stores the current resume as `resumeData.cv` and
+`resumeData.cvJsonRaw`, using Studio's six-field contract: company, title, summary,
+skills, experience and education. Profile and Studio's current-resume view render
+that content with the default Studio template and formatting. The original
+`resumeData.resumeBase64` upload is retained for application attachments. Previewing
+the profile does not overwrite an existing Studio editor draft.
+
+Studio's toolbar provides Set as default, enabled when the template, formatting
+or website visibility differs from the saved default. Website visibility lives
+under Customize → Header. The Input panel no longer displays the legacy Prompt
+selector or profile name.
+
 | SpeedyApply field | Studio use |
 | --- | --- |
 | `profileName` | Stored profile alias for history and synchronization |

@@ -30,7 +30,7 @@ test('Resume Studio keeps its editor mounted beside the preview without the prev
  vm.createContext(context);vm.runInContext(source.slice(start,end),context);const tree=context.Py();
  assert.equal(nodes(tree).filter(node=>node.type==='ResumeEditor').length,1);
  assert.equal(nodes(tree).find(node=>node.type==='ResumeEditor').props.candidate,candidate);
- assert.equal(nodes(tree).find(node=>node.type==='StudioSelectors').props.candidate,candidate);
+ assert.equal(nodes(tree).find(node=>node.type==='StudioSelectors'),undefined);
  assert.ok(!nodes(tree).some(node=>node.props.role==='tablist'||node.props.role==='tabpanel'));
  assert.equal(nodes(tree).find(node=>node.props.className==='resume-studio-panel').props.hidden,undefined);
  assert.ok(!nodes(tree).some(node=>node.props.className==='resume-candidate-actions'||node.props.className==='resume-editor-heading'));
@@ -67,7 +67,7 @@ test('Resume Studio input starts collapsed and toggles independently of Customiz
     useRef: value => ({ current: value }), useCallback: fn => fn, useEffect: () => {},
   }, q1: () => {}, matchMedia: () => ({ matches: true }),
     K1: () => ({ reason: '', busy: false, folder: { busy: false }, candidateRevision: 1 }),
-    PreviewWebHeader: 'WebHeader', Q1: 'Folder', mS: 'Customizer', W1: 'Viewer', CurrentResumePreview:'CurrentResume',
+    PreviewWebHeader: 'WebHeader', Q1: 'Folder', mS: 'Customizer', W1: 'Viewer', CurrentResumePreview:'CurrentResume', StudioHeaderControls:'HeaderPreferences',
     chrome: { runtime: { getURL: file => `chrome-extension://test/${file}` } } });
   vm.runInContext(source.slice(first, last), context);
   const render = () => { cursor = 0; return context.V2(); };
@@ -101,7 +101,7 @@ test('ready Resume Studio exposes PDF export only in the preview top bar', async
   const first = source.indexOf('function V2('), last = source.indexOf('(0,J1.createRoot)', first);
   const jsx = (type, props) => ({ type, props: props || {} }); let state = 0, started = 0;
   const context = vm.createContext({ $t: { jsx, jsxs: jsx }, je: { useState: initial => [state++ === 1 ? { workspaceId: '41', candidateId: 'one', draftId: 'draft', status: 'waiting' } : typeof initial === 'function' ? initial() : initial, () => {}], useRef: value => ({ current: value }), useCallback: fn => fn, useEffect: () => {} },
-    q1: () => {}, matchMedia: () => ({ matches: true }), K1: () => ({ reason: '', busy: false, folder: { busy: false }, candidateRevision: 1, start: () => started++ }), PreviewWebHeader: 'WebHeader', Q1: 'Folder', mS: 'Customizer', W1: 'Viewer', CurrentResumePreview:'CurrentResume', chrome: { runtime: { getURL: file => `chrome-extension://test/${file}` } } });
+    q1: () => {}, matchMedia: () => ({ matches: true }), K1: () => ({ reason: '', busy: false, folder: { busy: false }, candidateRevision: 1, start: () => started++ }), PreviewWebHeader: 'WebHeader', Q1: 'Folder', mS: 'Customizer', W1: 'Viewer', CurrentResumePreview:'CurrentResume', StudioHeaderControls:'HeaderPreferences', chrome: { runtime: { getURL: file => `chrome-extension://test/${file}` } } });
   vm.runInContext(source.slice(first, last), context);
   const tree = context.V2(), toolbar = nodes(tree).find(node => node.props.className === 'preview-export-controls');
   const buttons = nodes(toolbar).filter(node => node.props['aria-label'] === 'Export PDF');

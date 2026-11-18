@@ -1,5 +1,6 @@
 import { normalizeProfile, profileName, profileToStudio, studioExtras, studioToProfile } from './profile-model.js';
 import {defaultExportRoot,DEFAULT_EXPORT_ROOT_KEY} from './default-export-root.js';
+import {withProfileResumeJSON} from './profile-resume-json.js';
 
 const prefix = 'autofill-profile:';
 const activeKey = 'active-candidate:v1';
@@ -29,7 +30,7 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
 
   async function write(id, profile, studio, previous, filename, mutationId) {
     const now = new Date().toISOString();
-    const record = { id, profile: normalizeProfile(profile), studio, revision: (previous?.revision || 0) + 1,
+    const record = { id, profile: withProfileResumeJSON(normalizeProfile(profile)), studio, revision: (previous?.revision || 0) + 1,
       originalFilename: filename || previous?.originalFilename || 'autofill-profile.json', importedAt: previous?.importedAt || now,
       createdAt: previous?.createdAt || previous?.importedAt || now, updatedAt: now, lastMutationId: mutationId };
     await storage.set({ [keyFor(id)]: record });
@@ -61,7 +62,7 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
       const raw = (await browser.storage.local.get('profile')).profile;
       if (raw) {
         let profile;
-        try { profile = normalizeProfile(raw); } catch { /* Keep malformed user data untouched; normal reads report it. */ }
+        try { profile = withProfileResumeJSON(normalizeProfile(raw)); } catch { /* Keep malformed user data untouched; normal reads report it. */ }
         if (profile) {
           const matching = (await records()).find(record => equal(record.profile, profile));
           const record = matching || await write(crypto.randomUUID(), profile, {}, null, 'autofill-profile.json', 'speedy-profile-existing');
@@ -79,7 +80,7 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
     const raw = (await browser.storage.local.get('profile')).profile;
     if (!raw) return null;
     let profile;
-    try { profile = normalizeProfile(raw); } catch (error) { fail('INVALID_PROFILE', error.message); }
+    try { profile = withProfileResumeJSON(normalizeProfile(raw)); } catch (error) { fail('INVALID_PROFILE', error.message); }
     const id = (await storage.get(activeKey))[activeKey];
     let record = id ? await read(id) : null;
     if (!record) {
@@ -88,6 +89,7 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
     } else if (!equal(record.profile, profile)) {
       record = await write(record.id, profile, record.studio, record, null, `speedy-profile-edit:${crypto.randomUUID()}`);
     }
+    if (!equal(raw, record.profile)) await browser.storage.local.set({ profile: structuredClone(record.profile) });
     return record;
   }
   const api = {
@@ -118,7 +120,7 @@ export function createProfileRepository({ browser, storage, queue, parseLegacy, 
           profile.profileName = document.candidate.name.slice(0, 20) || 'Default';
           studio = studioExtras(document, profile);
         } else {
-          profile = normalizeProfile(value?.profile || value);
+          profile = withProfileResumeJSON(normalizeProfile(value?.profile || value));
           const existing = (await records()).find(record => equal(record.profile, profile)) || (await records()).find(record => record.profile.profileName === profile.profileName);
           id = existing?.id || crypto.randomUUID(); studio = existing?.studio || {};
         }

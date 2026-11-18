@@ -34,6 +34,14 @@ export async function readDocumentSettings(browser = globalThis.chrome) {
   return normalizeDocumentSettings(stored[DOCUMENT_SETTINGS_KEY]);
 }
 
+// Selection and document content belong to the request. Delivery preferences
+// remain live so turning off downloads or previews also affects waiting runs.
+export async function readDocumentDeliverySettings(browser=globalThis.chrome,snapshot={}){
+  const saved=(await browser.storage.local.get(DOCUMENT_SETTINGS_KEY))[DOCUMENT_SETTINGS_KEY];
+  const delivery=Object.fromEntries(['autoDownload','autoPreview','formats'].filter(key=>saved&&Object.hasOwn(saved,key)).map(key=>[key,saved[key]]));
+  return normalizeDocumentSettings({...snapshot,...delivery});
+}
+
 export function createDocumentSettings({ browser = globalThis.chrome, root = document, events = window } = {}) {
   const q = selector => root.querySelector(selector);
   const form = q('#document-settings-form'), status = q('#document-settings-status');

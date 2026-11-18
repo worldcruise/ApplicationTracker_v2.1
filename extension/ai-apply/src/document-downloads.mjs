@@ -1,6 +1,6 @@
 import { createGenerationStore } from './generation-store.mjs';
 import { createDocumentFileStore } from './document-file-store.mjs';
-import { normalizeDocumentSettings, readDocumentSettings } from './document-settings.mjs';
+import { normalizeDocumentSettings, readDocumentSettings,readDocumentDeliverySettings } from './document-settings.mjs';
 import { exportDocuments } from './document-export.mjs';
 import { createJobQueue } from './job-queue.mjs';
 import { createQueueStore } from './queue-store.mjs';
@@ -69,11 +69,12 @@ export function createDocumentDownloads({ browser = chrome, store = createGenera
       if (!file || file.downloadId !== item.downloadId) throw new Error('The cached document is unavailable. Use Download files to retry.');
       await files.put({ ...file, state, ...(state === 'failed' ? { error: download?.error || 'Download unavailable.' } : {}) });
       let preview = false;
+      const activeRun=await read(runId),preferences=await readDocumentDeliverySettings(browser,{...activeRun?.documentSettings,autoPreview:activeRun?.downloads?.autoPreview});
       const current = await update(runId, delivery => {
         if (!delivery?.files.some(row => row.downloadId === item.downloadId)) return null;
         const rows = delivery.files.map(row => {
           if (row.downloadId !== item.downloadId) return row;
-          preview = state === 'complete' && delivery.autoPreview && !row.previewOpened;
+          preview = state === 'complete' && preferences.autoPreview && !row.previewOpened;
           return { ...row, state, error: state === 'failed' ? download?.error || 'Download unavailable.' : '',
             ...(preview ? { previewOpened: true } : {}) };
         });
@@ -101,7 +102,7 @@ export function createDocumentDownloads({ browser = chrome, store = createGenera
   async function perform(id, manual) {
     const original = await read(id);
     if (original?.phase !== 'complete' || original.kind === 'job-cleanup' || !original.result) return;
-    const preferences = manual ? await readDocumentSettings(browser) : normalizeDocumentSettings(original.documentSettings);
+    const preferences = manual ? await readDocumentSettings(browser) : await readDocumentDeliverySettings(browser,original.documentSettings);
     const settings=normalizeDocumentSettings({...preferences,...original.exportFormats?{formats:original.exportFormats}:{}});
     let claimed = false;
     const run = await update(id, (previous, current) => {
@@ -134,6 +135,8 @@ export function createDocumentDownloads({ browser = chrome, store = createGenera
         includeCoverLetter: normalizeDocumentSettings(run.documentSettings).includeCoverLetter } }, { kinds: run.exportKinds });
       await update(id, current => ({ ...current, state: 'downloading', errors: exported.errors }));
       for (const artifact of exported.files) {
+        const latest=await readDocumentDeliverySettings(browser,settings);
+        if(!manual&&!latest.autoDownload){await update(id,current=>{const next={...current,queued:true};next.state=current.files.length||current.errors.length?overall(next):'skipped';return next;});return;}
         const key = `${id}/${run.downloads.startedAt}/${artifact.kind}.${artifact.format}`;
         try {
           await files.put({ ...artifact, key, runId: id, state: 'downloading' });
@@ -142,7 +145,7 @@ export function createDocumentDownloads({ browser = chrome, store = createGenera
             await files.put({...artifact,key,runId:id,state:'complete',destination});
             const item={key,kind:artifact.kind,format:artifact.format,filename:destination.filename,state:'complete',destination};
             await update(id,current=>({...current,files:[...current.files,item]}));
-            if(settings.autoPreview)await openDocumentPreview(browser,item);
+            if((await readDocumentDeliverySettings(browser,settings)).autoPreview)await openDocumentPreview(browser,item);
             continue;
           }
           const downloadId = await browser.downloads.download({ url: dataUrl(artifact), filename: documentCompanyFolder(documentExportCompany(run))+'/'+artifact.filename,

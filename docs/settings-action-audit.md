@@ -7,13 +7,13 @@ Audited on 2026-11-17 against the current native side panel and web app.
 | Profile | Canonical profile service supplies Autofill facts, resume uploads, and Resume Studio identity and timeline data. |
 | AI provider | `chatProvider` selects ChatGPT or DeepSeek for generation and the dock chat selector. Changes sync across open settings and workspace views. |
 | Include cover letter | Updates the same `documentSettings.selectedModules` selection as the Prompt Generate row. |
-| Automatic download / preview / formats | `document-downloads.mjs` uses the request's saved preferences for automatic delivery. Manual generation downloads use current delivery preferences while preserving that request's selected document sections. Saved Resume and Cover letter buttons always export the requested PDF, independently of automatic-download formats and the next Generate selection. |
+| Automatic download / preview / formats | `document-downloads.mjs` uses current delivery preferences while preserving the request's selected document sections. Preview preference is checked again when a file completes. Saved Resume and Cover letter buttons always export the requested PDF, independently of automatic-download formats and the next Generate selection. |
 | Reuse saved application answers | `dock-apply-service.js` uses both profile reusable answers and learned answers. Switching this off prevents both on the next fill. |
-| Save answers for later applications | Reviewed text and selected answers are learned after individual fills or Fill all. File uploads and consent checkboxes are excluded. |
+| Save answers for later applications | The retained review actions can learn supplied answers. The current button-only dock does not collect answers typed directly on the employer page. File uploads and consent checkboxes are excluded. |
 | Record confirmed submissions | Checked again when submission is confirmed, including an existing Autofill run. Turning it off prevents creating an Application record. |
 | Candidate Form | Prompt placeholder defaults and bullet counts are read from the saved candidate document when preparing a prompt. These defaults do not replace the canonical Autofill profile. |
 | Instruction / JD / Resume / Cover letter / final JSON | The current generation builder combines selected templates and snapshots the selection and inputs with the request. |
-| Autofill prompt / application instructions | Draft answer with AI includes these instructions and the selected questions. It does not append resume or contact source data. |
+| Autofill prompt / application instructions | Retained AI-answer backend actions include these instructions and selected questions. The button-only Autofill UI does not invoke AI drafting. |
 | Keyword highlights | Page highlighting consumes enabled, case, whole-word, color, and keyword preferences. |
 | Keyboard shortcut | The capture command uses Chrome's assigned command. The Change shortcut button opens Chrome's shortcut settings; workspace shortcuts retain their displayed bindings. |
 | Daily application goal | Dashboard goal and progress read `dailyGoal`. |
@@ -21,7 +21,7 @@ Audited on 2026-11-17 against the current native side panel and web app.
 | Default export root | Resume Studio and AI-generated document delivery use the selected directory handle. Generated PDFs go into a company folder as `Candidate Full Name.pdf` and `cover letter.pdf`; exporting again replaces those PDFs. Without a configured folder, generated documents use a company folder under Chrome downloads. |
 | Theme | The shared theme preference applies to the web app, native dock, and Studio. |
 
-Manual retrieval's **Save result** remains an explicit save/export/preview action, even with automatic download disabled. A request already in progress keeps its generation selection; later checkbox changes apply to the next request. Autofill reads the latest global settings at its next fill or submission action. Explicit programmatic per-run overrides remain supported.
+Manual retrieval's **Save result** saves the documents and respects automatic download and preview preferences. Disabling automatic downloads keeps the saved result in the extension without exporting files. A request already in progress keeps its generation selection; later module-selection changes apply to the next request. Delivery preferences remain live. Autofill reads the latest global settings at its next fill or submission action. Explicit programmatic per-run overrides remain supported.
 
 The full folder path is display metadata. File writes use the browser-selected directory handle. A configured folder that is missing or denied reports an error instead of silently exporting elsewhere.
 

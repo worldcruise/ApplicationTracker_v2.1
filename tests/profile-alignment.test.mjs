@@ -4,6 +4,7 @@ import { setImmediate } from 'node:timers/promises';
 import { IDBFactory } from 'fake-indexeddb';
 import { createStudioStorage } from '../extension/studio/storage.js';
 import { emptyProfile, normalizeProfile, profileToStudio, studioToProfile } from '../extension/studio/profile-model.js';
+import {withProfileResumeJSON} from '../extension/studio/profile-resume-json.js';
 import { createProfileRepository } from '../extension/studio/profile-repository.js';
 import { openStudioPreview } from '../extension/studio/dock.js';
 import { openWebStudioPreview } from '../extension/studio/web-preview.js';
@@ -29,7 +30,7 @@ test('Studio inherits the default export root without changing the canonical pro
   const f=await repository(t,{profile:profile()}),before=structuredClone(f.values.profile);
   await saveDefaultExportRoot({name:'Default exports',kind:'directory'},f.storage);
   const candidate=await f.repo.bootstrap();assert.equal(candidate.document.applicationPreferences.exportDirectory,'Default exports');
-  assert.equal((await createQueueDirectoryStore().matching(candidate.id,'Default exports')).candidateId,candidate.id);assert.deepEqual(f.values.profile,before);
+  assert.equal((await createQueueDirectoryStore().matching(candidate.id,'Default exports')).candidateId,candidate.id);assert.deepEqual(f.values.profile,withProfileResumeJSON(before));
   await f.repo.save({candidateId:candidate.id,expectedRevision:candidate.revision,document:candidate.document,mutationId:crypto.randomUUID()});
   await saveDefaultExportRoot({name:'New default',kind:'directory'},f.storage);assert.equal((await f.repo.bootstrap()).document.applicationPreferences.exportDirectory,'New default');
 });
@@ -75,12 +76,12 @@ test('the existing SpeedyApply profile is canonical and its page edits refresh S
   const original = profile();
   const { repo, storage, browser, values } = await repository(t, { profile: original, appliedList: [{ jobTitle: 'Keep this' }] });
   const loaded = await repo.bootstrap();
-  assert.deepEqual(loaded.profile, original);
+  assert.deepEqual(loaded.profile, withProfileResumeJSON(original));
   assert.equal((await repo.list())[0].name,'Jane M Doe');
   assert.equal((await repo.list({includeProfileName:true}))[0].profileName,'Engineering');
   const canonical = (await storage.get(`autofill-profile:${loaded.id}`))[`autofill-profile:${loaded.id}`];
   assert.equal(canonical.document, undefined);
-  assert.deepEqual(canonical.profile, original);
+  assert.deepEqual(canonical.profile, withProfileResumeJSON(original));
   const edit = structuredClone(original);
   edit.jobData[0].jobTitle = 'Senior Engineer';
   await browser.storage.local.set({ profile: edit });
@@ -91,7 +92,7 @@ test('the existing SpeedyApply profile is canonical and its page edits refresh S
   await assert.rejects(repo.save({ candidateId: loaded.id, expectedRevision: 1, document: loaded.document, mutationId: crypto.randomUUID() }), error => error.code === 'CONFLICT');
   const saved = await repo.save({ candidateId: loaded.id, expectedRevision: 2, document: { ...refreshed.document, applicationPreferences: { preferredDocumentTemplateId: 'harvard' } }, mutationId: crypto.randomUUID() });
   assert.equal(saved.document.applicationPreferences.preferredDocumentTemplateId, 'harvard');
-  assert.deepEqual(values.profile, edit);
+  assert.deepEqual(values.profile, withProfileResumeJSON(edit));
   assert.deepEqual(values.appliedList, [{ jobTitle: 'Keep this' }]);
 });
 
@@ -100,7 +101,7 @@ test('reviewed dock resume updates retain canonical fields, backups and revision
   const updated={...structuredClone(original),skillsData:['New skill']};
   const next=await repo.updateCanonical({candidateId:current.id,expectedRevision:current.revision,profile:updated,mutationId:crypto.randomUUID()});
   assert.equal(next.revision,current.revision+1);assert.deepEqual(values.profile.skillsData,['New skill']);assert.deepEqual(values.profile.employmentData,original.employmentData);assert.deepEqual(values.profile.contactData,original.contactData);
-  assert.deepEqual((await storage.get(`profile-backup:resume-import:${current.id}:${current.revision}`))[`profile-backup:resume-import:${current.id}:${current.revision}`].profile,original);
+  assert.deepEqual((await storage.get(`profile-backup:resume-import:${current.id}:${current.revision}`))[`profile-backup:resume-import:${current.id}:${current.revision}`].profile,withProfileResumeJSON(original));
   await assert.rejects(repo.updateCanonical({candidateId:current.id,expectedRevision:current.revision,profile:updated,mutationId:crypto.randomUUID()}),error=>error.code==='CONFLICT');
   await storage.set({'dock-apply-run:v1:41':{candidateId:current.id,phase:'questions'}});await assert.rejects(repo.select('another-candidate'),error=>error.code==='SINGLE_PROFILE');
   assert.equal((await repo.select(current.id)).id,current.id);
@@ -114,7 +115,7 @@ test('legacy candidates migrate with backups without replacing an existing Speed
   const { repo, storage, values } = await repository(t, { profile: source }, { 'candidate:legacy': legacy, 'active-candidate:v1': 'legacy' });
   const current = await repo.bootstrap();
   assert.notEqual(current.id, 'legacy');
-  assert.deepEqual(values.profile, source);
+  assert.deepEqual(values.profile, withProfileResumeJSON(source));
   const records = await storage.get(null);
   assert.deepEqual(records['candidate-backup:profile-alignment:legacy'], legacy);
   assert.equal(records['candidate:legacy'], undefined);
@@ -132,7 +133,7 @@ test('SpeedyApply JSON import, duplicate replacement, and deletion preserve back
   const source = profile();
   const input = { raw: JSON.stringify(source), filename: 'profile.json', mutationId: crypto.randomUUID() };
   const imported = await repo.import(input);
-  assert.deepEqual(values.profile, source);
+  assert.deepEqual(values.profile, withProfileResumeJSON(source));
   assert.equal((await repo.import(input)).revision, 1);
   const changed = { ...source, contactData: { ...source.contactData, email: 'new@example.test' } };
   const replacement = { raw: JSON.stringify(changed), filename: 'profile.json', mutationId: crypto.randomUUID() };

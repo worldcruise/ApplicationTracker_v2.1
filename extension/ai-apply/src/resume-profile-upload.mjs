@@ -15,5 +15,12 @@ export async function profileResumePreview(profile,{browser=chrome,store=createD
   return browser.runtime.getURL('preview.html')+'?'+new URLSearchParams({aiFile:key,embedded:'1'});
 }
 
+export async function profileStudioResumePreview(profile,{render,store=createDocumentFileStore(),browser=chrome,key='preview/profile-studio-resume.pdf',expectedRevision=null}={}){
+  const pdf=await render({profile,expectedRevision});
+  if(typeof pdf?.base64!=='string'||!atob(pdf.base64).startsWith('%PDF-'))throw Error('Resume Studio could not prepare the current resume.');
+  await store.put({key,bytes:Uint8Array.from(atob(pdf.base64),value=>value.charCodeAt(0)),state:'preview',kind:'resume',format:'pdf',mime:'application/pdf',filename:pdf.filename||'Current resume.pdf'});
+  return browser.runtime.getURL('preview.html')+'?'+new URLSearchParams({aiFile:key,embedded:'1'});
+}
+
 const sectionKeys={personal:['nameData','contactData','addressData','websiteData'],education:['educationData'],experience:['jobData'],skills:['skillsData','languageData']};
 export function changedProfileSections(before,after){return Object.entries(sectionKeys).filter(([,keys])=>keys.some(key=>JSON.stringify(before?.[key]??null)!==JSON.stringify(after?.[key]??null))).map(([section])=>section);}

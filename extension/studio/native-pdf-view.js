@@ -18,8 +18,11 @@ export function mountNativePDF(host,{url=globalThis.URL,onRendered=()=>{},onFail
     let frame;
     try{
       const objectURL=url.createObjectURL(new Blob([pdfBytes(pdf)],{type:'application/pdf'}));
-      frame=doc.createElement('iframe');frames.set(frame,objectURL);frame.className='native-pdf-frame native-pdf-pending';frame.title=pdf.filename||title;
-      frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;
+      frame=doc.createElement('iframe');frames.set(frame,objectURL);frame.className='native-pdf-frame';frame.title=pdf.filename||title;
+      frame.loading='eager';
+      // Chrome must be able to lay out the first PDF while its viewer starts.
+      // Only hide a replacement when a completed document is already visible.
+      if(active){frame.classList.add('native-pdf-pending');frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;}
       frame.addEventListener('load',()=>{
         if(disposed||current!==generation||!frames.has(frame))return;
         if(active&&active!==frame)remove(active);active=frame;

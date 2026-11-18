@@ -10,7 +10,10 @@ test('native viewer retains the completed revision, ignores obsolete loads and r
   const page=new Window({settings:{enableIframePageLoading:true}});t.after(()=>page.happyDOM.abort());const host=page.document.createElement('section');page.document.body.append(host);
   const blobs=[],revoked=[],rendered=[],failed=[],viewer=mountNativePDF(host,{url:{createObjectURL:blob=>{blobs.push(blob);return 'about:blank?pdf='+blobs.length;},revokeObjectURL:url=>revoked.push(url)},onRendered:revision=>rendered.push(revision),onFailure:(revision,message)=>failed.push({revision,message})});
   const pdf=revision=>({base64:btoa('%PDF-1.7\nRevision '+revision),documentRevision:revision,pageCount:2});
-  viewer.show(pdf(1));const first=host.querySelector('iframe');first.dispatchEvent(new page.Event('load'));assert.deepEqual(rendered,[1]);assert.equal(host.dataset.documentRevision,'1');
+  viewer.show(pdf(1));const first=host.querySelector('iframe');
+  assert.equal(first.classList.contains('native-pdf-pending'),false,'the initial PDF must be visible before Chrome starts its viewer');
+  assert.equal(first.hasAttribute('aria-hidden'),false);assert.equal(first.loading,'eager');assert.equal(host.getAttribute('aria-busy'),'true');
+  first.dispatchEvent(new page.Event('load'));assert.deepEqual(rendered,[1]);assert.equal(host.dataset.documentRevision,'1');
   assert.equal(blobs[0].type,'application/pdf');assert.equal(await blobs[0].text(),'%PDF-1.7\nRevision 1');
   viewer.show(pdf(2));const obsolete=host.lastElementChild;assert.equal(first.isConnected,true);assert.equal(obsolete.getAttribute('aria-hidden'),'true');
   viewer.show(pdf(3));obsolete.dispatchEvent(new page.Event('load'));assert.deepEqual(rendered,[1]);assert.equal(first.isConnected,true);

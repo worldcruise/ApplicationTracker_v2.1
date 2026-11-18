@@ -1,3 +1,5 @@
+import {createStudioHeaderPreferences} from '../extension/studio/studio-header-preferences.js';
+import {createProfileResumeRenderer} from '../extension/studio/profile-resume-renderer.js';
 import {configureMeetingWorkflow} from "../extension/studio/meeting-workflow-service.js";
 import {initializeLocalApp} from "../extension/studio/initialize-local-app.js";
 import {registerAIClipboard} from '../extension/studio/ai-clipboard-offscreen.js';
@@ -88,7 +90,7 @@ async function coordinator(t, {withProfile=true}={}) {
   };
   await chrome.storage.local.set({'meeting-mock-cards:v1':[],'meeting-mock-cards:version':6});
   const sandbox = vm.createContext({ resumeSectionOrder, skillsFirstTemplate, chrome, studioStorage, createProfileRepository, createDockRecordsService, saveDockApplication:async input=>{const raw=chrome.storage.local.values.appliedList||[];await chrome.storage.local.set({appliedList:[{jobTitle:input.jobTitle,jobLink:input.jobLink,companyName:input.companyName,companyLink:input.companyLink,profileName:input.profileDetails.profileName,status:'applied',date:input.appliedDate.toString()},...raw]});},syncDockApplication:async()=>{},deleteDockApplication:async()=>{},openWebStudioPreview, requireEmbeddedEditor, handleCaptureHotkey, DASHBOARD_OPERATIONS, WEB_RECORD_OPERATIONS,isSubmittedPreviewSender:sender=>isSubmittedPreviewSender(sender,chrome),isWorkspaceRecordsSender:sender=>isWorkspaceRecordsSender(sender,chrome),isNativeDockSender: sender => isNativeDockSender(sender, chrome), isPromptSettingsSender: sender => isPromptSettingsSender(sender, chrome), PROMPT_SETTINGS_OPERATIONS, crypto: webcrypto, TextEncoder, TextDecoder, URL, console, structuredClone, setTimeout, clearTimeout });
-  Object.assign(sandbox,{buildStudioPrompt:buildPrompt,createRecordPDFRenderer,configureNativePanel,configurePromptSettingsBridge,configureAIApply:()=>({}),configureMeetingWorkflow,initializeLocalApp,parseResumeUpload:(input,{parse,fallback})=>(parse||fallback)(input),createSingleProfileService,isProfileSettingsSender:sender=>isProfileSettingsSender(sender,chrome),PROFILE_OPERATIONS,createApplicationPromptRepository,createQueueResumeExports,createDockApplyService,parseResumeFile:async()=>({}),generateDockAnswer:async()=>''});
+  Object.assign(sandbox,{createStudioHeaderPreferences,createProfileResumeRenderer,buildStudioPrompt:buildPrompt,createRecordPDFRenderer,configureNativePanel,configurePromptSettingsBridge,configureAIApply:()=>({}),configureMeetingWorkflow,initializeLocalApp,parseResumeUpload:(input,{parse,fallback})=>(parse||fallback)(input),createSingleProfileService,isProfileSettingsSender:sender=>isProfileSettingsSender(sender,chrome),PROFILE_OPERATIONS,createApplicationPromptRepository,createQueueResumeExports,createDockApplyService,parseResumeFile:async()=>({}),generateDockAnswer:async()=>''});
   const source = (await readFile('extension/service-worker.js', 'utf8')).replace(/^import[^\n]+\n/gm, '');
   vm.runInContext(source, sandbox);
   const workspace = { id: chrome.runtime.id, url: chrome.runtime.getURL('workspace.html'), frameId: 1, documentId: 'editor-document', tab: { id: 100, windowId: 41 } };
@@ -116,6 +118,47 @@ test('the Profile page replaces a resume through the actual worker without creat
   const profiles=await app.request('DASHBOARD_STATE',{}, {id:app.chrome.runtime.id,url:app.chrome.runtime.getURL('sidepanel.html'),frameId:0});assert.equal(profiles.result.candidates.length,1);
   assert.equal(await app.request('PROFILE_STATE',{}, {...sender,url:'https://example.test/job'}),null);
   assert.equal(await app.request('PROFILE_STATE',{}, {...sender,url:app.chrome.runtime.getURL('options.html#/settings/prompts')}),null);
+});
+
+test('current profile resume renders through the real Studio engine using the saved default style and keeps editor text intact',async t=>{
+  const app=await coordinator(t),renderer=await resumeRenderer(),{chrome,request}=app;
+  const sender={id:chrome.runtime.id,url:chrome.runtime.getURL('options.html#/settings/profile'),frameId:0,tab:{id:7,windowId:41}};
+  const initial=(await request('PROFILE_STATE',{},sender)).result.candidate,document=structuredClone(initial.document);
+  document.applicationPreferences={...document.applicationPreferences,preferredDocumentTemplateId:'harvard',defaultDocumentStyle:{documentTemplate:{id:'harvard',version:1},formattingOverrides:{headerAlignment:'right',accentColor:'#6550ce'}}};
+  const styled=await request('CANDIDATE_SAVE',{candidateId:initial.id,expectedRevision:initial.revision,document,mutationId:crypto.randomUUID()});assert.equal(styled.ok,true,styled.error?.message);
+  const profile=structuredClone(styled.result.candidate.profile),cv=renderer.fixture('harvard').resume;profile.nameData={firstName:'Jordan',lastName:'Taylor',preferredName:false};profile.contactData.email='jordan@example.test';
+  profile.websiteData={...profile.websiteData,linkedin:'https://linkedin.com/in/jordan',github:'https://github.com/jordan',personal:'https://jordan.example.test'};
+  profile.jobData=cv.experience.map(row=>({jobTitle:row.title,company:row.company,location:'Boston, MA',startDate:'2020-01',endDate:'',currentlyWorkHere:true,description:row.sentences.join('\n')}));
+  profile.educationData=[{school:'Example University',degree:"Bachelor's",degreeName:'Bachelor of Science',fieldOfStudy:'Computer Science',startDate:'2014-09',endDate:'2018-05',currentlyAttending:false}];
+  profile.resumeData={resumeBase64:btoa('%PDF-1.7 uploaded original'),fileName:'Original.pdf',fileSize:26,dateUploaded:new Date().toISOString(),cvJsonRaw:JSON.stringify(cv)};
+  const saved=await request('PROFILE_RESUME_IMPORT',{profile,expectedProfile:styled.result.candidate.profile,mutationId:crypto.randomUUID()},sender);assert.equal(saved.ok,true,saved.error?.message);
+  const before=await request('STUDIO_BOOTSTRAP',{candidateId:initial.id});assert.equal(before.ok,true,before.error?.message);let snapshot;
+  const contexts=chrome.runtime.getContexts;chrome.runtime.getContexts=async filter=>filter.contextTypes?.includes('OFFSCREEN_DOCUMENT')?[{contextType:'OFFSCREEN_DOCUMENT'}]:contexts(filter);
+  chrome.runtime.sendMessage=async message=>{assert.equal(message.operation,'RENDER_DOCUMENT_PREVIEW');snapshot=message.payload.snapshot;const pdf=await renderer.render(snapshot);return{ok:true,requestId:message.requestId,result:{base64:Buffer.from(pdf.bytes).toString('base64'),sha256:pdf.sha256,pageCount:pdf.pageCount,documentRevision:snapshot.documentRevision}};};
+  const result=await request('PROFILE_RESUME_RENDER',{profile:saved.result.candidate.profile,expectedRevision:saved.result.candidate.revision},sender);assert.equal(result.ok,true,result.error?.message);assert.ok(atob(result.result.base64).startsWith('%PDF-'));
+  assert.equal(snapshot.documentTemplate.id,'harvard');assert.equal(snapshot.formattingOverrides.headerAlignment,'right');assert.equal(snapshot.candidate.name,'Jordan Taylor');assert.deepEqual(snapshot.resume,cv);assert.equal(result.result.filename,'Jordan Taylor.pdf');
+  assert.equal(chrome.storage.local.values.profile.resumeData.resumeBase64,profile.resumeData.resumeBase64);assert.deepEqual(chrome.storage.local.values.profile.resumeData.cv,cv);
+  const after=await request('STUDIO_BOOTSTRAP',{candidateId:initial.id});assert.deepEqual(after.result.record.draft,before.result.record.draft);
+  assert.equal(await request('PROFILE_RESUME_RENDER',{profile,expectedRevision:saved.result.candidate.revision},{...sender,url:'https://employer.test/apply'}),null);
+  const opened=await request('OPEN_STUDIO_PREVIEW',{windowId:41},sender);assert.equal(opened.ok,true,opened.error?.message);
+  const parent={id:chrome.runtime.id,url:chrome.runtime.getURL('preview.html'),frameId:0,documentId:'preview-document',tab:{id:100,windowId:41}};
+  const connected=await request('PREVIEW_CONNECT',{},parent);assert.equal(connected.ok,true,connected.error?.message);
+  const current=await request('PREVIEW_CURRENT_RESUME',{},parent);assert.equal(current.ok,true,current.error?.message);
+  assert.ok(atob(current.result.pdf.base64).startsWith('%PDF-'));assert.notEqual(current.result.pdf.base64,profile.resumeData.resumeBase64);
+  assert.equal(snapshot.documentTemplate.id,'harvard');assert.deepEqual(snapshot.resume,cv);assert.equal(current.result.pdf.filename,'Jordan Taylor.pdf');
+  assert.equal((await request('STUDIO_BOOTSTRAP',{candidateId:initial.id})).result.record.draft.cvJsonRaw,before.result.record.draft.cvJsonRaw);
+  assert.equal((await request('DOCUMENT_SETTINGS_UPDATE',{auto:true,draftId:before.result.record.draft.id,candidateId:initial.id,templateId:'ember',mutationId:crypto.randomUUID()})).ok,true);
+  assert.equal((await request('PREVIEW_CURRENT_RESUME',{},parent)).ok,true);assert.equal(snapshot.documentTemplate.id,'ember');
+  assert.equal((await request('PREVIEW_DOCUMENT_PREFERENCES',{},parent)).result.isDefault,false);
+  const defaultSaved=await request('PREVIEW_DOCUMENT_PREFERENCES',{action:'default'},parent);assert.equal(defaultSaved.ok,true,defaultSaved.error?.message);assert.equal(defaultSaved.result.isDefault,true);
+  assert.equal((await request('PREVIEW_DOCUMENT_PREFERENCES',{},parent)).result.isDefault,true);
+  assert.equal((await request('PREVIEW_DOCUMENT_PREFERENCES',{action:'websites',visible:false},parent)).ok,true);
+  assert.equal((await request('PREVIEW_CURRENT_RESUME',{},parent)).ok,true);assert.equal(snapshot.profile.links.length,0);assert.deepEqual(chrome.storage.local.values.profile.websiteData,profile.websiteData);
+  assert.equal((await request('PREVIEW_DOCUMENT_PREFERENCES',{action:'websites',key:'linkedin',visible:true},parent)).ok,true);
+  assert.equal((await request('PREVIEW_CURRENT_RESUME',{},parent)).ok,true);assert.deepEqual(Array.from(snapshot.profile.links),[profile.websiteData.linkedin]);
+  assert.equal(await request('PREVIEW_DOCUMENT_PREFERENCES',{action:'default'},sender),null);
+  assert.equal(await request('PREVIEW_CURRENT_RESUME',{},sender),null);
+  assert.equal((await request('PREVIEW_CURRENT_RESUME',{}, {...parent,tab:{id:101,windowId:41}})).ok,false);
 });
 
 test('only the native dock can use Apply operations through the actual worker router',async t=>{

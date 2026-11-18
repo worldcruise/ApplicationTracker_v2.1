@@ -4,7 +4,7 @@ import { generationPrompt, providerHome, providerUrl, runMarker, runningPhases, 
 import { providerTabs, inspectProviderTab, firstIdleProviderTab, focusProviderTab, tabUrl } from './ai-tabs.mjs';
 import { requestChatUrl } from './saved-chat.mjs';
 import { generationDiagnostics } from './generation-diagnostics.mjs';
-import { readDocumentSettings } from './document-settings.mjs';
+import { readDocumentSettings,readDocumentDeliverySettings } from './document-settings.mjs';
 import { jobCleanupPrompt, validateJobCleanup } from './job-cleanup.mjs';
 import { createJobQueue, applyGeneratedJobMetadata } from './job-queue.mjs';
 import { readJobAnalysisSetting } from './job-analysis-settings.mjs';
@@ -520,7 +520,7 @@ export function createGenerationService({ browser = chrome, store = createGenera
     if(current.updatedAt!==payload.expectedUpdatedAt||payload.expectedRevision!==undefined&&current.canonicalRevision!==payload.expectedRevision)throw Error('This job changed in another view. Reopen Manual retrieval before saving.');
     const context=manualRetrievalContext(current,source,payload.selectedModules);
     const result=validateManualRetrieval(payload.json,context),id=uuid();
-    const deliverySettings=source?.documentSettings||await readDocumentSettings(browser);
+    const deliverySettings=await readDocumentDeliverySettings(browser,source?.documentSettings);
     // Validate before stopping an observer or writing anything. All selected
     // sections commit together, preserving unselected saved documents.
     if(source&&runningPhases.includes(source.phase))await stop(source.id);
@@ -529,7 +529,7 @@ export function createGenerationService({ browser = chrome, store = createGenera
     finally{queue.dispose();}
     const provider=source?.provider||((await browser.storage.local.get('chatProvider')).chatProvider==='deepseek'?'deepseek':'chatgpt');
     const timestamp=now(),run={id,jobId,kind:'documents',provider,phase:'complete',manualResult:true,
-      documentContractVersion:context.contractVersion,documentSettings:{...deliverySettings,...context.settings,autoDownload:true,autoPreview:true},selectedModules:[...context.settings.selectedModules],
+      documentContractVersion:context.contractVersion,documentSettings:{...context.settings,autoDownload:deliverySettings.autoDownload,autoPreview:deliverySettings.autoPreview,formats:deliverySettings.formats},selectedModules:[...context.settings.selectedModules],
       inputSnapshot:structuredClone(context.request.input),job:savedJob,prompt:source?.prompt||'',url:source?.url||current.manualChatUrl||null,
       tabId:source?.tabId??null,sendIntentAt:source?.sendIntentAt??null,submittedAt:source?.submittedAt??null,baseline:source?.baseline,
       outputFormat:'combined-json',raw:payload.json,result,sourceRunId:source?.id??null,submissionSource:'manual-paste',

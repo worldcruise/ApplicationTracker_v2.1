@@ -56,7 +56,7 @@ for(const keys of [['job','resume','coverLetter'],['resume'],['coverLetter'],['j
   let delivery,finished;
   const s=await server(t,keys,{onComplete:run=>{finished=delivery.start(run);return finished;}});
   Object.assign(s.run.documentSettings,{autoDownload:false,autoPreview:false,formats:['pdf']});
-  await s.browser.storage.local.set({documentSettings:{autoDownload:false,autoPreview:false,formats:['json']}});
+  await s.browser.storage.local.set({documentSettings:{autoDownload:true,autoPreview:true,formats:['pdf']}});
   const result=deliveryFixture(t,s);delivery=result.delivery;
   const saved=await s.service.importResult(s.id,s.payload(Object.fromEntries(keys.map(key=>[key,output[key]]))));
   await flush();await finished;
@@ -86,14 +86,23 @@ test('Manual retrieval resumes exports after worker restart and keeps saved resu
 test('Copy-only Manual retrieval uses the current export formats without opening an AI tab',async t=>{
   let delivery,finished;
   const s=await server(t,['resume'],{onComplete:run=>{finished=delivery.start(run);return finished;}});
-  await s.browser.storage.local.set({documentSettings:{autoDownload:false,autoPreview:false,formats:['json']}});
+  await s.browser.storage.local.set({documentSettings:{autoDownload:true,autoPreview:false,formats:['json']}});
   const result=deliveryFixture(t,s);delivery=result.delivery;
   await s.service.importResult(s.id,{...s.payload({resume}),runId:undefined,selectedModules:['resume']});
   await flush();await finished;
   assert.equal(result.downloads.length,1);assert.ok(result.downloads[0].filename.endsWith('.json'));
   assert.deepEqual(JSON.parse(atob(result.downloads[0].url.split(',')[1])),{resume});
-  assert.equal(result.previews.length,1);assert.ok(result.previews[0].url.includes('ai-apply/document-preview.html?file='));
+  assert.equal(result.previews.length,0);
   assert.equal(s.calls.length,0);
+});
+
+test('Manual retrieval saves the result without exporting when automatic downloads are off',async t=>{
+  let delivery,finished;const s=await server(t,['resume'],{onComplete:run=>{finished=delivery.start(run);return finished;}});
+  Object.assign(s.run.documentSettings,{autoDownload:true,autoPreview:true});
+  await s.browser.storage.local.set({documentSettings:{autoDownload:false,autoPreview:false,formats:['pdf']}});
+  const result=deliveryFixture(t,s);delivery=result.delivery;await s.service.importResult(s.id,s.payload({resume}));await flush();await finished;
+  const run=s.state.runs.at(-1);assert.equal(run.documentSettings.autoDownload,false);assert.equal(run.documentSettings.autoPreview,false);assert.equal(run.downloads.state,'skipped');
+  assert.deepEqual(result.rendered,[]);assert.deepEqual(result.downloads,[]);assert.deepEqual(result.previews,[]);assert.equal((await s.jobs.getJob(s.id)).resume.summary,resume.summary);
 });
 
 for(let mask=1;mask<8;mask++)test(`manual retrieval ${mask} saves exactly the request's selected sections`,async t=>{

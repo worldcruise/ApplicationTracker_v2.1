@@ -1,5 +1,6 @@
 import {normalizeProfile} from './profile-model.js';
 import {mountAutofillProfile} from '../ai-apply/src/profile-editor.mjs';
+import {profileStudioResumePreview} from '../ai-apply/src/resume-profile-upload.mjs';
 
 export const profileEditorValue=profile=>profile?normalizeProfile(profile):null;
 export async function profileRequest(operation,payload={}){
@@ -18,6 +19,7 @@ export function createProfileResumePage(React){
       const editor=mountAutofillProfile(host.current,{mode:'page',initialSection:section,
         read:()=>profileRequest('PROFILE_STATE'),
         preview:payload=>profileRequest('PROFILE_RESUME_PREVIEW',payload),
+        styledPreview:(profile,options)=>profileStudioResumePreview(profile,{...options,render:payload=>profileRequest('PROFILE_RESUME_RENDER',payload)}),
         save:payload=>profileRequest(payload.importResume?'PROFILE_RESUME_IMPORT':'PROFILE_SAVE',payload)});
       return()=>editor.dispose();
     },[initialSection]);

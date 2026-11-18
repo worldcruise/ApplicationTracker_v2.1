@@ -4,9 +4,9 @@ import {phoneCountryCodes} from '../../studio/phone-country-codes.js';
 import {connectAddressFields} from './profile-address.mjs';
 import {resumeUploadPayload,profileResumePreview,changedProfileSections} from './resume-profile-upload.mjs';
 
-export function mountAutofillProfile(root,{read,save,preview,close=()=>{},mode='popup',initialSection,previewPDF=profileResumePreview}) {
+export function mountAutofillProfile(root,{read,save,preview,close=()=>{},mode='popup',initialSection,previewPDF=profileResumePreview,styledPreview}) {
   const doc=root.ownerDocument,make=(tag,cls,text)=>{const node=doc.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
-  let original=null,profile=null,busy=false,busyLabel='',active=initialSection||(mode==='page'?'resume':'personal'),revision=null,pendingResume=null,changed=[],disposed=false,previewUrl=null,addressFields=null;
+  let original=null,profile=null,busy=false,busyLabel='',active=initialSection||(mode==='page'?'resume':'personal'),revision=null,pendingResume=null,changed=[],disposed=false,previewUrl=null,addressFields=null,previewRevision=0;
   const sections=[['resume','Resume'],['personal','Personal information'],['education','Education'],['experience','Work experience'],['skills','Skills & languages'],['employment','Equal employment'],['preferences','Preferences']];
   root.className='af-profile'+(mode==='page'?' af-profile-page':'');root.setAttribute('role',mode==='page'?'region':'dialog');if(mode!=='page')root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Autofill profile settings');
   const header=make('header','af-header'),heading=make('div'),title=make('h1',null,'Autofill profile'),subtitle=make('p',null,'Review the information used to fill your applications.');heading.append(title,subtitle);
@@ -23,7 +23,7 @@ export function mountAutofillProfile(root,{read,save,preview,close=()=>{},mode='
     saveButton.disabled=busy||!profile;saveButton.textContent=busy?busyLabel:original?'Save profile':'Create profile';root.setAttribute('aria-busy',String(busy));
     for(const control of content.querySelectorAll('button,input,textarea,select'))control.disabled=busy;
     const uploadButton=content.querySelector('.af-upload-drop');
-    if(uploadButton){uploadButton.querySelector('strong').textContent=busy?busyLabel:profile?.resumeData.resumeBase64?'Drop a new resume to replace it':'Drop your resume here';uploadButton.querySelector('.af-upload-description').textContent=busy?message.textContent:'or click to choose a file';uploadButton.disabled=busy||!preview;}
+    if(uploadButton){uploadButton.querySelector('strong').textContent=busy?busyLabel:profile?.resumeData.resumeBase64||profile?.resumeData.cvJsonRaw||profile?.resumeData.cv?'Drop a new resume to replace it':'Drop your resume here';uploadButton.querySelector('.af-upload-description').textContent=busy?message.textContent:'or click to choose a file';uploadButton.disabled=busy||!preview;}
     for(const button of nav.children)button.disabled=busy;
     for(const button of nav.children){const label=sections.find(([id])=>id===button.dataset.section)?.[1];button.textContent=label;if(changed.includes(button.dataset.section)){const dot=make('span','af-changed-dot');dot.title='Updated from resume';dot.setAttribute('aria-label','Updated from resume');button.append(dot);}}
     reviewBanner.hidden=!pendingResume;
@@ -45,18 +45,25 @@ export function mountAutofillProfile(root,{read,save,preview,close=()=>{},mode='
     }catch(error){if(!disposed)message.textContent=error.message;}finally{busy=false;busyLabel='';if(!disposed){updateStatus();renderSection();}}
   }
   function resumeSection(){
-    const resume=profile.resumeData,hasResume=!!resume?.resumeBase64;
+    const resume=profile.resumeData,hasResume=!!(resume?.resumeBase64||resume?.cvJsonRaw||resume?.cv);
     const file=make('input');file.type='file';file.accept='.pdf,.docx';file.hidden=true;file.setAttribute('aria-label','Upload or replace resume');file.disabled=busy;file.addEventListener('change',()=>{void upload(file.files?.[0]);file.value='';});
     const drop=make('button','af-upload-drop');drop.type='button';drop.disabled=busy||!preview;drop.append(make('span','af-upload-symbol','↑'),make('strong',null,busy?busyLabel:hasResume?'Drop a new resume to replace it':'Drop your resume here'),make('span','af-upload-description',busy?message.textContent:'or click to choose a file'),make('small',null,'PDF · up to 1 MB / DOCX · up to 6 MiB'));
     drop.addEventListener('click',()=>file.click());drop.addEventListener('dragover',event=>{event.preventDefault();drop.classList.add('af-dragover');});drop.addEventListener('dragleave',()=>drop.classList.remove('af-dragover'));drop.addEventListener('drop',event=>{event.preventDefault();drop.classList.remove('af-dragover');void upload(event.dataTransfer?.files?.[0]);});content.append(file,drop);
     content.append(make('p','af-help',hasResume?'Replacing your resume updates this same profile. Review extracted details before saving.':'Upload a resume to build your profile, or enter your details in the sections on the left.'));
     if(!hasResume)return;
-    const card=make('section','af-resume-file'),text=make('div');text.append(make('strong',null,resume.fileName),make('span',null,pendingResume?'Ready for review · not saved':'Current resume'));card.append(text);
-    if(/\.pdf$/i.test(resume.fileName)){const show=make('button','af-link','Preview PDF');show.type='button';show.addEventListener('click',async()=>{show.disabled=true;try{
+    const card=make('section','af-resume-file'),text=make('div');text.append(make('strong',null,resume.fileName||'Current resume'),make('span',null,pendingResume?'Ready for review · not saved':'Current resume'));card.append(text);
+    if(!styledPreview&&/\.pdf$/i.test(resume.fileName)){const show=make('button','af-link','Preview PDF');show.type='button';show.addEventListener('click',async()=>{show.disabled=true;try{
       previewUrl||=await previewPDF(profile,{key:previewKey});if(disposed||!previewUrl)return;
       const existing=content.querySelector('.af-resume-preview');if(existing){existing.remove();show.textContent='Preview PDF';return;}
       const frame=make('iframe','af-resume-preview');frame.title='Uploaded resume PDF';frame.src=previewUrl;card.after(frame);frame.scrollIntoView?.({block:'start',behavior:'instant'});show.textContent='Hide preview';
     }catch(error){message.textContent=error.message;}finally{show.disabled=false;}});card.append(show);}content.append(card);
+    if(styledPreview){
+      const version=++previewRevision,area=make('section','af-styled-resume'),loading=make('p','af-help','Preparing your resume in the default Resume Studio style…');loading.setAttribute('role','status');area.append(loading);content.append(area);
+      void styledPreview(structuredClone(profile),{key:previewKey.replace(/\.pdf$/,`-${version}.pdf`),expectedRevision:revision}).then(url=>{
+        if(disposed||version!==previewRevision||!content.contains(area)||!url)return;
+        const frame=make('iframe','af-resume-preview');frame.title='Current resume · Resume Studio style';frame.src=url;area.replaceChildren(frame);
+      }).catch(error=>{if(!disposed&&version===previewRevision&&content.contains(area)){loading.textContent=error.message;loading.setAttribute('role','alert');}});
+    }
     if(resume.cvJsonRaw){const box=make('details','af-extraction-notes'),heading=make('summary',null,'Resume Studio CV JSON'),json=make('textarea','af-cv-json'),copy=make('button','af-link','Copy CV JSON');json.value=resume.cvJsonRaw;json.readOnly=true;json.rows=12;json.setAttribute('aria-label','Extracted Resume Studio CV JSON');copy.type='button';copy.addEventListener('click',async()=>{try{await doc.defaultView.navigator.clipboard.writeText(json.value);copy.textContent='Copied';}catch{box.open=true;json.focus();json.select();message.textContent='Select and copy the CV JSON below.';}});box.append(heading,copy,json);content.append(box);}
     if(pendingResume){const summary=make('section','af-review-summary');summary.append(make('h3',null,'Review extracted information'));
       const counts=[['personal','Personal details',profile.nameData.firstName||profile.contactData.email?'Review details':'Add details'],['education','Education',profile.educationData.length+' '+(profile.educationData.length===1?'entry':'entries')],['experience','Work experience',profile.jobData.length+' '+(profile.jobData.length===1?'entry':'entries')],['skills','Skills',profile.skillsData.length+' skills']];
