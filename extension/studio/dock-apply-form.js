@@ -13,10 +13,10 @@ export function createApplyForm(document, { uploadResume } = {}) {
   const label=node=>clean((node.type==='file'?uploadFieldLabel(node):'') || formFieldCaption(node) || node.getAttribute('placeholder') || node.name || node.id);
   const fieldLabel=node=>choices.label(node)||(node.type==='radio'?clean(closestFormAncestor(node,'fieldset')?.querySelector('legend')?.textContent)||label(node):label(node));
   const visible=node=>{for(let item=node;item;item=composedParent(item)){if(item.disabled||item.matches('[hidden],[aria-hidden="true"],fieldset[disabled]'))return false;const style=win.getComputedStyle(item);if(style.display==='none'||style.visibility==='hidden')return false;}return true;};
-  function writeValue(node,value){
+  function writeValue(node,value,{change=true}={}){
     const prototype=node.tagName==='SELECT'?win.HTMLSelectElement.prototype:node.tagName==='TEXTAREA'?win.HTMLTextAreaElement.prototype:win.HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(prototype,'value').set.call(node,value);
-    node.dispatchEvent(new win.Event('input',{bubbles:true,composed:true}));node.dispatchEvent(new win.Event('change',{bubbles:true,composed:true}));
+    node.dispatchEvent(new win.Event('input',{bubbles:true,composed:true}));if(change)node.dispatchEvent(new win.Event('change',{bubbles:true,composed:true}));
   }
   const combos=createComboboxController(document,{visible,writeValue});
   const choices=createChoiceFields(document,{combos,visible});
@@ -24,12 +24,12 @@ export function createApplyForm(document, { uploadResume } = {}) {
   function key(node) { if(!ids.has(node)){const previous=[...nodes].find(([,old])=>!old.isConnected&&old.tagName===node.tagName&&(node.id?old.id===node.id:node.name&&old.name===node.name)&&(node.id||label(old)===label(node)));ids.set(node,previous?.[0]||`field-${++serial}`);} const id=ids.get(node);nodes.set(id,node);return id; }
   const sameRadioGroup=(node,other)=>other.type==='radio'&&other.name===node.name&&other.form===node.form&&other.getRootNode()===node.getRootNode();
   function controls() {
-    const raw=queryFormTree(document,'input,textarea,select,[role="combobox"],[role="listbox"],[role="radiogroup"],button[aria-haspopup="listbox"]').filter(node=>(combos.isCombo(node)||!['hidden','password','submit','button','reset','image'].includes(node.type))&&(!node.readOnly||combos.isCombo(node))&&
+    const raw=queryFormTree(document,'input,textarea,select,[role="combobox"],[role="listbox"],[role="radiogroup"],[aria-haspopup="listbox"],button[aria-haspopup="true"][aria-controls],button[data-automation-id][aria-haspopup="true"]').filter(node=>(combos.isCombo(node)||!['hidden','password','submit','button','reset','image'].includes(node.type))&&(!node.readOnly||combos.isCombo(node))&&
       (node.type==='file'? visible(node)||!node.disabled&&!node.closest('fieldset[disabled]')&&!!uploadFieldLabel(node)&&!!uploadFieldContainer(node)&&visible(uploadFieldContainer(node)):visible(node)||!node.disabled&&nativeSelectProxy(node)&&visible(nativeSelectProxy(node))));
     return choices.collect(raw);
   }
   function uploadedName(node){const native=node.files?.[0]?.name;if(native)return native;const expected=uploadProofs.get(uploadFieldLabel(node));return expected&&uploadFieldContainer(node)?.textContent.includes(expected)?expected:'';}
-  function hasValue(node) { return choices.has(node)?choices.info(node).filled:node.type==='file'?!!uploadedName(node):['checkbox','radio'].includes(node.type)?node.checked:combos.isCombo(node)?!!combos.value(node):!!normalize(node.value); }
+  function hasValue(node) { return choices.has(node)?choices.info(node).filled:node.type==='file'?!!uploadedName(node):['checkbox','radio'].includes(node.type)?node.checked:combos.isCombo(node)?!!combos.value(node):node.tagName==='SELECT'?[...node.options].some(option=>option.selected&&!!option.value&&!option.disabled&&!combos.isPlaceholder(option.textContent)):!!normalize(node.value); }
   function valid(node) { return node.getAttribute('aria-invalid')!=='true'&&(combos.isCombo(node)||!node.validity||node.validity.valid); }
   function entries() {
     const seen=new Set(),fields=controls();
@@ -45,6 +45,7 @@ export function createApplyForm(document, { uploadResume } = {}) {
   async function set(node,value,check=()=>{}) {
     if(choices.has(node))return choices.set(node,value,{check});
     if(combos.isCombo(node))return combos.select(node,value,{check});
+    if(combos.isSchoolInput(node))return combos.select(node,value,{check,allowPlain:true});
     if(node.type==='radio') { const radio=controls().find(other=>sameRadioGroup(node,other)&&(other.value===value||combos.matches(node,label(other),value)));if(!radio)throw Error('Choose one of the available answers.');radio.click();return; }
     if(node.type==='checkbox') { if(!/^(yes|no|true|false)$/i.test(value))throw Error('Enter Yes or No for this checkbox.');const next=/^(yes|true)$/i.test(value);if(node.checked!==next)node.click();return; }
     if(node.tagName==='SELECT') { const option=[...node.options].find(option=>!option.disabled&&option.value&&(option.value.toLowerCase()===value.toLowerCase()||combos.matches(node,option.textContent,value)));if(!option)throw Error('Choose a value from the employer dropdown.');value=option.value; }
@@ -64,7 +65,8 @@ export function createApplyForm(document, { uploadResume } = {}) {
       const reconnect=()=>{for(const node of controls())if(!queued.has(node)){queued.add(node);pending.push(node);}};
       for(let count=0;count<500&&count<pending.length;count++) {
         const node=pending[count];if(!node.isConnected){reconnect();continue;}
-        check(runId);if(!node.isConnected||hasValue(node)||node.type==='radio'&&controls().some(other=>sameRadioGroup(node,other)&&other.checked)||combos.isCombo(node)&&normalize(node.value))continue;
+        check(runId);const schoolQuery=combos.isSchoolInput(node)&&normalize(node.value)===normalize(profileFieldAnswer(node,profile,fieldLabel(node)));
+        if(!node.isConnected||hasValue(node)&&!schoolQuery||node.type==='radio'&&controls().some(other=>sameRadioGroup(node,other)&&other.checked))continue;
         const documentField=/cover.?letter/i.test(label(node))||node.type==='file'&&/resume|\bcv\b/i.test(label(node));
         if(Array.isArray(message.selectedIds)&&!message.selectedIds.includes(key(node))&&!documentField)continue;
         if(node.type==='file') {

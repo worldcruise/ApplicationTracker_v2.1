@@ -1,54 +1,34 @@
-# Current autofill workflow
+﻿# Current autofill workflow
 
-The original injected SpeedyApply application runtime was removed during runtime cleanup. Active autofill lives in the maintained form bridge and uses the single local profile. Its platform submission observers have been restored separately from the supplied SpeedyApply source; see [submission integration](speedy-submission-integration.md) for the original functions and conflict handling.
+The dock's Apply to Job workspace has one Autofill button. It starts filling directly; there is no form popup, question editor, AI draft action, profile shortcut, or manual submission-confirmation control in this section. The saved job, document previews and AI chat elsewhere in the workspace remain available.
 
-## What the Autofill button does
+## Button behavior
 
-1. Find the current employer tab. With a selected queued job, use its linked application tab; an empty queue uses the saved profile directly.
-2. Inspect its form without entering values. Required questions and optional fields with known profile answers are selected by default; the user can deselect them.
-3. Fill selected profile facts, reviewed answers, and saved reusable answers immediately. Existing values and dropdown searches are preserved.
-4. Attach the current prepared resume when requested by the form. If no current tailored resume exists, use the original uploaded resume when available. Render documents only when needed; renderer failures leave those uploads manual and do not block the other fields.
-5. Report remaining fields for manual entry or Draft answers with AI. The employer's Next and Submit buttons remain manual.
+- Autofill uses the current employer tab and selected queued job. With an empty queue, it uses the existing single profile.
+- Clicking the button invokes the existing engine without restricting it to fields selected in a sidebar editor. The engine fills known profile facts and saved reusable answers, and attaches available documents.
+- While filling, the button is disabled and reads Filling. An interrupted run can be resumed with the same button; another employer tab can take over an old run.
+- The button reads Submitting while the existing submission observers await confirmation, then Submitted after confirmation. Submission disables filling for that application. Changing to another employer page re-enables Autofill.
+- Errors and status details are available in the button's tooltip instead of separate helper messages. Idle UI updates read the run status without scanning or rendering a second copy of the employer's form.
 
-The AI needs-input alert tracks the specific unanswered questions from its batch. Entering an answer in the dock immediately updates its count; completing those questions on the employer page also clears it, including while the popup is closed. Empty multiple-choice selections remain unanswered. The alert is scoped to its job and employer tab.
+## Engine and submission ownership
 
-Submission progress takes priority over empty-form help. While awaiting confirmation, the popup shows the submission status. Once the existing observers confirm submission, both the header and popup show **Application submitted**, fill controls are hidden, and completed forms are no longer inspected. This state follows the same application's confirmation redirect and clears when the tab moves to another job. An empty or missing form alone never marks an application submitted.
+Document rendering, uploaded-profile-resume fallback, reusable answer storage, platform submission observers and recording preferences remain in place. The interface waits for an initial passive binding to finish before starting a fill, avoiding competing Start and Track requests.
 
-Autofill works with an empty queue and before document generation. Its controls stay visible independently of the selected job card. Filling a form does not move the job to Applications. For a selected queued job, the confirmation observer or explicit Confirm submitted action records a submission once; an outdated generated resume is excluded from the submitted record. Profile-only filling does not create records. On supported platforms, the restored original submission observer records a subsequent submission directly in Applications, independently of the dock and queue, when recording is enabled.
+Dropdowns open their actual control, search when necessary, activate the matching option, and wait for its committed value. Existing search text is not treated as a selected answer. University fields also wait for institution suggestions; change/blur validation runs after selection so entering a search query does not prematurely invalidate the institution. Native selects, custom button menus and multi-selects keep their own acceptance checks. User edits made while options are loading are preserved, and an ambiguous or unaccepted match remains pending.
 
-To record an application manually, open a queued job's **Details** and choose **Mark as applied** below **Edit**. The dashboard's queue detail offers the same action below **Update record**. Both use the existing revision-checked transfer: the job leaves the active queue, its current documents and saved job details are frozen into an Applied application, and repeated requests do not create duplicates. A resume is optional for manual recording; an independently saved cover letter is retained. The action records locally and does not submit the employer's form. Unsaved dashboard edits must be saved or discarded first.
+Employer Next and Submit actions remain manual. An empty or missing form alone never records an application. The existing confirmation observers record a submission once and update Applications. On supported platforms, submission tracking works independently of the dock or an Autofill run when recording is enabled. Profile-only filling retains its existing recording policy.
 
-Switching applications keeps Autofill available. Clicking it validates the new target, stops the previous fill, and starts the selected form with one request. Delayed work from the old run cannot write more fields or replace the new run's state. Previous pending submissions keep their document-bound observers and persist separately until a receipt arrives, including across worker restarts.
+Manual recording remains available from a queued job's Details through Mark as applied. Submitted documents remain frozen in Applications; documents are editable in Job Queue before submission.
 
-## Supported facts and controls
+## Maintained files
 
-Contact details, phone country code, address, websites, saved employment preferences and explicit eligibility answers, existing education and work-history fields, and skills use deterministic profile mapping. Repeated history sections use their corresponding profile records; missing records are not replaced with the first record. Dates split into month and year when the form requests separate fields.
-
-Native inputs, selects, radio groups, Greenhouse React Select/Select2 controls, ATS button-based listboxes, and resume/cover-letter upload fields are supported. Consents and unknown or ambiguous questions remain manual. New education or work-history sections are not created automatically.
-
-Choice widgets are scanned as logical questions. A native Select2 control owns its proxy search box; a custom combobox owns its nested search controls and explicitly linked popup; listbox option checkboxes are not separate application questions. Native multiple selects, ARIA multi-selects, and checkbox sets with an explicit shared question expose one multi-choice editor. All selected values travel together as a JSON array encoded in the answer string, while the popup displays their readable labels. Existing choices remain untouched during bulk fill; manual replacement validates the available choices before changing the control. Separate questions with identical labels remain independent, and consent fields stay separate.
-
-Form inspection includes open shadow roots and HTTP-origin `about:blank`/`about:srcdoc` application frames. Labels resolve within the field's own root; hidden hosts and opaque sandboxed frames are excluded. Single-field web components can supply their outer label. Native input/change events cross shadow boundaries so employer listeners receive the changes.
-
-Address mapping supports `address-line1`, `address-line2`, and the full multiline `street-address` autocomplete token. Street suggestions can append city/state/postal information, including Google-style address menus; the saved street must match the suggestion's street portion. Autofill clicks that matching option so the employer's own address handler can synchronize related fields. Different house numbers and active user searches are preserved, and unrelated hidden job IDs never count as the street's answer.
-
-Document uploads include hidden native file inputs inside a visible upload control. Both input and change events are dispatched, and replacement controls are discovered after employer re-renders. Resume and cover letter are attached independently; rejected file types and upload errors remain visible in the autofill popup instead of being silently skipped.
-
-## Active code
-
-| Module | Responsibility |
+| File | Responsibility |
 | --- | --- |
-| extension/studio/autofill-profile.js | Saved profile facts, education and work-history mapping |
-| extension/studio/dock-apply-form.js | Form scan, selection, native value events and uploads |
-| extension/studio/apply-form-dom.js | Open-shadow discovery, composed ancestry and root-local labels |
-| extension/studio/apply-choice-fields.js | Choice ownership, grouped questions and multi-value selection |
-| extension/studio/apply-form-widgets.js | Dropdown selection and committed-value verification |
-| extension/studio/dock-apply-service.js | Tab ownership, manual runs, document preparation and submission tracking |
-| extension/ai-apply/src/autofill-workspace.mjs | Dock popup, field selectors, reviewed drafts and manual actions |
-| src/dock-apply-content.js | Isolated content-script entry |
-| extension/studio/speedy-submission-rules.js | Original platform selectors, routes and navigation windows |
-| extension/studio/speedy-submission-adapters.js | Original metadata extraction and progress stages |
-| extension/studio/speedy-submission-tracker.js | Passive, dock-independent platform observers |
-| extension/studio/speedy-submission-service.js | Progress persistence and shared submission-recording bridge |
+| extension/ai-apply/src/autofill-workspace.mjs | Single button, request sequencing, run status, and native workspace connection |
+| extension/ai-apply/src/tracker.css | Apply workspace and button styling |
+| extension/studio/dock-apply-service.js | Shared profile, documents, run lifecycle and recording |
+| extension/studio/dock-apply-form.js | Employer form scan, values, choices and uploads |
+| extension/studio/apply-navigation.js | Apply, Next, Submit and confirmation signals |
+| extension/studio/speedy-submission-tracker.js | Dock-independent platform submission observation |
 
-See [runtime architecture](runtime-architecture.md) for the rest of the extension.
+See [submission integration](speedy-submission-integration.md) and [runtime architecture](runtime-architecture.md).

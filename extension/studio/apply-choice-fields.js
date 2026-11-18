@@ -79,7 +79,7 @@ export function createChoiceFields(document,{combos,visible}) {
     const group=groups.get(node);if(!group)return false;
     if(group.kind==='combo'&&!group.multiple){await combos.select(node,answer,{check});return true;}
     check();const wanted=parse(answer);if(!group.multiple&&wanted.length>1)throw Error('Choose one answer from the available options.');
-    if(group.kind==='combo'&&!nodes(node,{includeHidden:false}).length){node.focus();node.click();for(let attempt=0;attempt<25&&!nodes(node,{includeHidden:false}).length;attempt++){await new Promise(resolve=>document.defaultView.setTimeout(resolve,60));check();}}
+    if(group.kind==='combo'&&!nodes(node,{includeHidden:false}).length){node.focus();combos.activate(node);for(let attempt=0;attempt<25&&!nodes(node,{includeHidden:false}).length;attempt++){await new Promise(resolve=>document.defaultView.setTimeout(resolve,60));check();}}
     const available=nodes(node),matched=wanted.map(value=>available.find(item=>!disabled(item)&&(optionValue(item)===value||item.value===value||combos.matches(node,optionLabel(item),value))));
     if(matched.some(item=>!item))throw Error('Choose answers from the available dropdown options.');
     if(group.kind==='native') {
@@ -89,9 +89,14 @@ export function createChoiceFields(document,{combos,visible}) {
       for(const previous of available){
         const target=matched.includes(previous),value=optionValue(previous);if(disabled(previous))continue;
         let option=nodes(node).find(item=>optionValue(item)===value);if(option&&!!chosen(option)===target)continue;check();
-        if(group.kind==='combo'&&(!option||!visible(option))){node.click();for(let attempt=0;attempt<25;attempt++){await new Promise(resolve=>document.defaultView.setTimeout(resolve,60));check();option=nodes(node).find(item=>optionValue(item)===value&&visible(item));if(option)break;}}
+        if(group.kind==='combo'&&(!option||!visible(option))){combos.activate(node);for(let attempt=0;attempt<25;attempt++){await new Promise(resolve=>document.defaultView.setTimeout(resolve,60));check();option=nodes(node).find(item=>optionValue(item)===value&&visible(item));if(option)break;}}
         if(!option||!visible(option))throw Error('Choose an option');
-        option.click();await new Promise(resolve=>document.defaultView.setTimeout(resolve,0));check();
+        combos.activate(option);
+        for(let attempt=0;attempt<25;attempt++){
+          await new Promise(resolve=>document.defaultView.setTimeout(resolve,40));check();
+          const accepted=selected(node).some(item=>item.value===value||combos.matches(node,item.label,optionLabel(previous)));
+          if(accepted===target)break;
+        }
       }
     }
     check();const actual=selected(node);if(wanted.length!==actual.length||matched.some(item=>!actual.some(value=>value.value===optionValue(item)||value.value===item.value)))throw Error('The employer did not accept all selected answers. Review this question on its page.');

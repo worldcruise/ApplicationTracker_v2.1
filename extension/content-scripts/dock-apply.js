@@ -68,12 +68,14 @@
   }
   function createComboboxController(document2, { visible, writeValue }) {
     const win = document2.defaultView;
-    const isCombo = (node) => node.getAttribute("role") === "combobox" || node.tagName === "INPUT" && (["list", "both"].includes(node.getAttribute("aria-autocomplete")) || node.getAttribute("aria-haspopup") === "listbox" || node.classList.contains("pac-target-input")) || node.tagName === "BUTTON" && node.getAttribute("aria-haspopup") === "listbox";
-    const widgetSelector = '.select-shell,.select__container,.Select,.select2-container,[data-automation-id^="formField-"],[role="combobox"]';
+    const discovered = /* @__PURE__ */ new WeakSet();
+    const widgetSelector = '.select-shell,.select__container,.select__control,.Select,.select2-container,.ant-select,.MuiAutocomplete-root,[data-automation-id^="formField-"],[role="combobox"]';
+    const isCombo = (node) => discovered.has(node) || node.getAttribute("role") === "combobox" || node.tagName === "INPUT" && (["list", "both", "inline"].includes(node.getAttribute("aria-autocomplete")) || node.getAttribute("aria-haspopup") === "listbox" || node.classList.contains("pac-target-input") || !!node.getAttribute("list") || !!closestFormAncestor(composedParent(node), '.select2-container,.select__control,.ant-select,.MuiAutocomplete-root,[role="combobox"]') || [node.getAttribute("aria-controls"), node.getAttribute("aria-owns")].filter(Boolean).flatMap((value2) => value2.split(/\s+/)).some((id) => formElementById(node, id)?.matches('[role="listbox"],[role="tree"],.ui-autocomplete'))) || node.matches('button,[role="button"]') && (["listbox"].includes(node.getAttribute("aria-haspopup")) || node.getAttribute("aria-haspopup") === "true" && !!(formFieldCaption(node) || closestFormAncestor(node, '[data-automation-id^="formField-"]')));
     const root = (node) => closestFormAncestor(composedParent(node), widgetSelector) || (node.parentElement && !/^(FORM|BODY|HTML)$/.test(node.parentElement.tagName) ? node.parentElement : node);
-    const placeholder = (value2) => !text2(value2) || /^(?:select(?:\s+(?:one|an?\s+option|an?\s+answer))?|choose(?:\s+(?:one|an?\s+option))?|search|type to search)[.\s…]*$/i.test(text2(value2));
+    const placeholder = (value2) => !text2(value2) || /^(?:please\s+)?(?:select|choose)(?:\s+(?:one|an?\b.*|your\b.*|country|state|school|university|option))?[.\s…-]*$|^(?:search|type to search)[.\s…]*$/i.test(text2(value2));
     const proofs = /* @__PURE__ */ new WeakMap();
     const fieldText = (node) => formFieldCaption(node) || formFieldCaption(closestFormAncestor(composedParent(node), '[role="combobox"]') || node);
+    const isSchoolInput = (node) => node.tagName === "INPUT" && !["hidden", "file", "password"].includes(node.type) && /\b(?:school|university|college|institution)\b/i.test([fieldText(node), node.name, node.id].join(" ").replace(/([a-z])([A-Z])/g, "$1 $2"));
     const streetField = (node) => {
       const auto = (node.autocomplete || "").split(/\s+/).at(-1);
       if (auto && !["off", "on"].includes(auto)) return ["street-address", "address-line1"].includes(auto);
@@ -85,7 +87,7 @@
       if (node.tagName === "INPUT" && streetField(node) && !container?.matches(widgetSelector)) return text2(node.getAttribute("aria-valuetext")) || (node.getAttribute("aria-expanded") !== "true" ? text2(node.value) : "");
       const selected = container?.querySelector('.select__single-value,[class*="-singleValue"],.Select-value-label,.select2-chosen');
       if (selected && visible(selected) && !placeholder(selected.textContent)) return text2(selected.textContent);
-      const hidden = container?.querySelector('input[type="hidden"][name]');
+      const hidden = container !== node ? [...container?.querySelectorAll('input[type="hidden"][name]') || []].find((item) => container.matches(widgetSelector) || item.name === node.name || item.name === node.id) : null;
       if (hidden?.value) return text2(hidden.value);
       if (node.getAttribute("aria-valuetext")) return text2(node.getAttribute("aria-valuetext"));
       const selectedOption = options(node, { includeHidden: true }).find((option) => option.getAttribute("aria-selected") === "true" || option.getAttribute("aria-checked") === "true" || option.querySelector("input:checked"));
@@ -100,14 +102,16 @@
       const ids = [...new Set(owners.flatMap((owner) => [owner.getAttribute("aria-controls"), owner.getAttribute("aria-owns")].filter(Boolean).flatMap((value2) => value2.split(/\s+/))))];
       const containers = ids.map((id) => formElementById(node, id)).filter(Boolean);
       if (!ids.length && (node.getAttribute("aria-expanded") === "true" || document2.activeElement === node)) {
-        const open = queryFormTree(document2, '[role="listbox"],.pac-container').filter(visible);
+        const open = queryFormTree(document2, '[role="listbox"],.pac-container,.ui-autocomplete,.select2-drop,.select2-dropdown,.tt-menu,.autocomplete-suggestions').filter(visible);
         if (open.length === 1) containers.push(open[0]);
       }
+      const datalist = formElementById(node, node.getAttribute("list"));
+      if (datalist?.tagName === "DATALIST") containers.push(datalist);
       return [...new Set(containers)];
     }
     function options(node, { includeHidden = false, scope = root(node) } = {}) {
       const containers = [scope, ...menus(node, scope)];
-      return [...new Set(containers.filter(Boolean).flatMap((container) => queryFormTree(container, '[role="option"],.select__option,.Select-option,[data-automation-id="menuItem"],.pac-item')))].filter((option) => (includeHidden || visible(option)) && option.getAttribute("aria-disabled") !== "true" && !option.classList.contains("select__option--is-disabled"));
+      return [...new Set(containers.filter(Boolean).flatMap((container) => queryFormTree(container, '[role="option"],.select__option,.Select-option,.select2-results__option,.select2-result-selectable,.ui-menu-item,.tt-suggestion,.autocomplete-suggestion,[data-automation-id="menuItem"],.pac-item,datalist option')))].filter((option) => (includeHidden || visible(option)) && option.getAttribute("aria-disabled") !== "true" && !option.classList.contains("select__option--is-disabled"));
     }
     const countryKey = (value2) => text2(value2).toLowerCase().replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, "").replace(/\s*\(?\+\d[\d\s-]*\)?$/, "").replace(/^united states of america$/, "united states").replace(/^(us|usa)$/, "united states").replace(/^(uk|great britain)$/, "united kingdom").trim();
     const countryField = (node) => /\bcountry\b/i.test(fieldText(node) || node.id);
@@ -133,63 +137,124 @@
       const optionKey = choice(option), answerKey = choice(answer);
       return optionKey === answerKey || optionKey === "bachelors" && answerKey.startsWith("bachelor of ") || optionKey === "masters" && answerKey.startsWith("master of ");
     }
+    const activate = (target) => {
+      if (typeof win.PointerEvent === "function") target.dispatchEvent(new win.PointerEvent("pointerdown", { bubbles: true, cancelable: true, composed: true, pointerType: "mouse", button: 0 }));
+      if (!target.isConnected) return;
+      target.dispatchEvent(new win.MouseEvent("mousedown", { bubbles: true, cancelable: true, composed: true, button: 0 }));
+      if (!target.isConnected) return;
+      if (typeof win.PointerEvent === "function") target.dispatchEvent(new win.PointerEvent("pointerup", { bubbles: true, cancelable: true, composed: true, pointerType: "mouse", button: 0 }));
+      target.dispatchEvent(new win.MouseEvent("mouseup", { bubbles: true, cancelable: true, composed: true, button: 0 }));
+      target.click();
+    };
     async function select(node, answer, { check = () => {
-    } } = {}) {
-      const identity2 = { id: node.id, name: node.name, caption: fieldText(node) }, typed = /* @__PURE__ */ new WeakSet();
+    }, allowPlain = false } = {}) {
+      const identity2 = { id: node.id, name: node.name, caption: fieldText(node), tag: node.tagName };
       const reconnect = () => {
         if (node.isConnected) return;
-        const candidates = queryFormTree(document2, 'input,[role="combobox"],button[aria-haspopup="listbox"]').filter((item) => isCombo(item) && (identity2.id ? item.id === identity2.id : identity2.name ? item.name === identity2.name : false) && fieldText(item) === identity2.caption);
+        const candidates = queryFormTree(document2, 'input,[role="combobox"],[aria-haspopup="listbox"],button[aria-haspopup="true"]').filter((item) => item.tagName === identity2.tag && (identity2.id ? item.id === identity2.id : identity2.name ? item.name === identity2.name : !!identity2.caption && fieldText(item) === identity2.caption));
         if (candidates.length !== 1) throw Error("The dropdown changed. Choose an option on the employer page.");
         node = candidates[0];
       };
-      const before = node.value, country = countryField(node), street = streetField(node), editable = node.tagName === "INPUT" && !node.readOnly;
-      const query = country && countryKey(answer) === "united states" ? "United States" : answer;
+      const before = node.value, country = countryField(node), street = streetField(node), query = country && countryKey(answer) === "united states" ? "United States" : answer;
+      const expected = (option2) => {
+        const caption = option2.getAttribute("aria-label") || option2.label || option2.textContent;
+        if (option2.getAttribute("data-value") === answer || option2.getAttribute("value") === answer) return true;
+        if (street) {
+          const address = option2.querySelector(".pac-item-query")?.textContent || text2(caption).split(",")[0];
+          return canonical(address) === canonical(answer) || canonical(caption) === canonical(answer);
+        }
+        if (isSchoolInput(node)) {
+          const school = (value2) => canonical(text2(value2).replace(/\s*\([^)]*\)\s*$/, "").split(",")[0]);
+          return school(caption) === school(answer);
+        }
+        return matches(node, caption, answer);
+      };
+      const list = formElementById(node, node.getAttribute("list"));
+      if (list?.tagName === "DATALIST") {
+        const matched = [...list.options].filter(expected);
+        if (matched.length !== 1) throw Error("Choose a value from the employer dropdown.");
+        check();
+        writeValue(node, matched[0].value);
+        node.blur();
+        proofs.set(node, { label: matched[0].value, inputValue: node.value });
+        return;
+      }
       check();
       node.focus();
-      node.click();
+      activate(node);
       node.dispatchEvent(new win.KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", bubbles: true, composed: true }));
-      if (editable) {
-        typed.add(node);
-        writeValue(node, query);
-      }
-      const checkQuery = () => {
-        check();
+      const typed = /* @__PURE__ */ new WeakSet();
+      let editor = null;
+      function search() {
         reconnect();
-        if (editable && !typed.has(node)) {
-          if (node.value && node.value !== query) throw Error("The dropdown changed while it was being filled. Review its answer on the employer page.");
-          typed.add(node);
-          writeValue(node, query);
+        const scope = root(node);
+        const input = node.tagName === "INPUT" && !node.readOnly ? node : [scope, ...menus(node)].filter(Boolean).flatMap((container) => queryFormTree(container, 'input:not([type="hidden"]):not([type="file"])')).find((input2) => !input2.readOnly && !input2.disabled);
+        if (input && !typed.has(input)) {
+          editor = input;
+          typed.add(input);
+          if (input !== node) input.focus();
+          writeValue(input, query, { change: false });
+          input.dispatchEvent(new win.KeyboardEvent("keyup", { key: String(query).at(-1) || "Unidentified", bubbles: true, composed: true }));
         }
-        if (!node.isConnected || editable && node.value !== query) throw Error("The dropdown changed while it was being filled. Review its answer on the employer page.");
-      };
-      let option;
-      for (let attempt = 0; attempt < 25; attempt++) {
-        checkQuery();
-        option = options(node).find((item) => {
-          const caption = item.getAttribute("aria-label") || item.textContent;
-          if (!street) return item.getAttribute("data-value") === answer || item.getAttribute("value") === answer || matches(node, caption, answer);
-          const address = item.querySelector(".pac-item-query")?.textContent || text2(caption).split(",")[0];
-          return canonical(address) === canonical(answer) || canonical(caption) === canonical(answer);
-        });
-        if (option) break;
+        if (editor?.isConnected && editor.value !== query) throw Error("The dropdown changed while it was being filled. Review its answer on the employer page.");
+      }
+      search();
+      let option, sawMenu = false;
+      for (let attempt = 0; attempt < (isSchoolInput(node) ? 40 : 25); attempt++) {
+        check();
+        search();
+        const available = options(node);
+        if (available.length) {
+          sawMenu = true;
+          discovered.add(node);
+        }
+        const matched = available.filter(expected);
+        const distinct = matched.filter((item) => !matched.some((other) => other !== item && item.contains(other)));
+        if (distinct.length === 1) {
+          option = distinct[0];
+          break;
+        }
+        if (distinct.length > 1) throw Error("More than one dropdown option matches. Choose an option on the employer page.");
         await new Promise((resolve) => win.setTimeout(resolve, 60));
       }
-      checkQuery();
+      check();
+      reconnect();
+      if (editor?.isConnected && editor.value !== query) throw Error("The dropdown changed while it was being filled. Review its answer on the employer page.");
       if (!option) {
-        if (editable) writeValue(node, before);
+        if (allowPlain && !sawMenu && !isCombo(node)) {
+          writeValue(node, query);
+          node.blur();
+          await new Promise((resolve) => win.setTimeout(resolve, 60));
+          check();
+          return;
+        }
+        if (editor?.isConnected) writeValue(editor, before || "", { change: false });
         node.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
         throw Error("Choose a value from the employer dropdown.");
       }
-      const selectedLabel = text2(option.getAttribute("aria-label") || option.textContent);
-      option.dispatchEvent(new win.MouseEvent("mousedown", { bubbles: true, cancelable: true, composed: true }));
-      option.click();
-      await new Promise((resolve) => win.setTimeout(resolve, 0));
-      check();
-      reconnect();
-      if (node.value && node.value !== query && node.getAttribute("aria-expanded") !== "true") proofs.set(node, { label: selectedLabel, inputValue: node.value });
-      if (!value(node)) throw Error("The employer dropdown did not accept this answer. Choose its option on the application page.");
+      const selectedLabel = text2(option.getAttribute("aria-label") || option.label || option.textContent), selectedValue = option.getAttribute("data-value") || option.getAttribute("value");
+      activate(option);
+      let validated = false;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        await new Promise((resolve) => win.setTimeout(resolve, 40));
+        check();
+        reconnect();
+        const closed = node.getAttribute("aria-expanded") !== "true" && (options(node).length === 0 || node.value !== query);
+        if (node.value && closed) proofs.set(node, { label: selectedLabel, inputValue: node.value });
+        const committed = value(node);
+        if (committed && (matches(node, committed, answer) || canonical(committed) === canonical(selectedLabel) || selectedValue && committed === selectedValue)) {
+          if (allowPlain && !validated) {
+            validated = true;
+            node.dispatchEvent(new win.Event("change", { bubbles: true, composed: true }));
+            node.blur();
+            continue;
+          }
+          return;
+        }
+      }
+      throw Error("The employer dropdown did not accept this answer. Choose its option on the application page.");
     }
-    return { isCombo, value, options, select, matches, root, menus };
+    return { activate, isCombo, isSchoolInput, isPlaceholder: placeholder, value, options, select, matches, root, menus };
   }
 
   // extension/studio/apply-navigation.js
@@ -484,7 +549,7 @@
       if (!group.multiple && wanted.length > 1) throw Error("Choose one answer from the available options.");
       if (group.kind === "combo" && !nodes(node, { includeHidden: false }).length) {
         node.focus();
-        node.click();
+        combos.activate(node);
         for (let attempt = 0; attempt < 25 && !nodes(node, { includeHidden: false }).length; attempt++) {
           await new Promise((resolve) => document2.defaultView.setTimeout(resolve, 60));
           check();
@@ -507,7 +572,7 @@
           if (option && !!chosen(option) === target) continue;
           check();
           if (group.kind === "combo" && (!option || !visible(option))) {
-            node.click();
+            combos.activate(node);
             for (let attempt = 0; attempt < 25; attempt++) {
               await new Promise((resolve) => document2.defaultView.setTimeout(resolve, 60));
               check();
@@ -516,9 +581,13 @@
             }
           }
           if (!option || !visible(option)) throw Error("Choose an option");
-          option.click();
-          await new Promise((resolve) => document2.defaultView.setTimeout(resolve, 0));
-          check();
+          combos.activate(option);
+          for (let attempt = 0; attempt < 25; attempt++) {
+            await new Promise((resolve) => document2.defaultView.setTimeout(resolve, 40));
+            check();
+            const accepted = selected(node).some((item) => item.value === value || combos.matches(node, item.label, optionLabel(previous)));
+            if (accepted === target) break;
+          }
         }
       }
       check();
@@ -545,11 +614,11 @@
       }
       return true;
     };
-    function writeValue(node, value) {
+    function writeValue(node, value, { change = true } = {}) {
       const prototype = node.tagName === "SELECT" ? win.HTMLSelectElement.prototype : node.tagName === "TEXTAREA" ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(prototype, "value").set.call(node, value);
       node.dispatchEvent(new win.Event("input", { bubbles: true, composed: true }));
-      node.dispatchEvent(new win.Event("change", { bubbles: true, composed: true }));
+      if (change) node.dispatchEvent(new win.Event("change", { bubbles: true, composed: true }));
     }
     const combos = createComboboxController(document2, { visible, writeValue });
     const choices = createChoiceFields(document2, { combos, visible });
@@ -565,7 +634,7 @@
     }
     const sameRadioGroup = (node, other) => other.type === "radio" && other.name === node.name && other.form === node.form && other.getRootNode() === node.getRootNode();
     function controls() {
-      const raw = queryFormTree(document2, 'input,textarea,select,[role="combobox"],[role="listbox"],[role="radiogroup"],button[aria-haspopup="listbox"]').filter((node) => (combos.isCombo(node) || !["hidden", "password", "submit", "button", "reset", "image"].includes(node.type)) && (!node.readOnly || combos.isCombo(node)) && (node.type === "file" ? visible(node) || !node.disabled && !node.closest("fieldset[disabled]") && !!uploadFieldLabel(node) && !!uploadFieldContainer(node) && visible(uploadFieldContainer(node)) : visible(node) || !node.disabled && nativeSelectProxy(node) && visible(nativeSelectProxy(node))));
+      const raw = queryFormTree(document2, 'input,textarea,select,[role="combobox"],[role="listbox"],[role="radiogroup"],[aria-haspopup="listbox"],button[aria-haspopup="true"][aria-controls],button[data-automation-id][aria-haspopup="true"]').filter((node) => (combos.isCombo(node) || !["hidden", "password", "submit", "button", "reset", "image"].includes(node.type)) && (!node.readOnly || combos.isCombo(node)) && (node.type === "file" ? visible(node) || !node.disabled && !node.closest("fieldset[disabled]") && !!uploadFieldLabel(node) && !!uploadFieldContainer(node) && visible(uploadFieldContainer(node)) : visible(node) || !node.disabled && nativeSelectProxy(node) && visible(nativeSelectProxy(node))));
       return choices.collect(raw);
     }
     function uploadedName(node) {
@@ -575,7 +644,7 @@
       return expected && uploadFieldContainer(node)?.textContent.includes(expected) ? expected : "";
     }
     function hasValue(node) {
-      return choices.has(node) ? choices.info(node).filled : node.type === "file" ? !!uploadedName(node) : ["checkbox", "radio"].includes(node.type) ? node.checked : combos.isCombo(node) ? !!combos.value(node) : !!normalize(node.value);
+      return choices.has(node) ? choices.info(node).filled : node.type === "file" ? !!uploadedName(node) : ["checkbox", "radio"].includes(node.type) ? node.checked : combos.isCombo(node) ? !!combos.value(node) : node.tagName === "SELECT" ? [...node.options].some((option) => option.selected && !!option.value && !option.disabled && !combos.isPlaceholder(option.textContent)) : !!normalize(node.value);
     }
     function valid(node) {
       return node.getAttribute("aria-invalid") !== "true" && (combos.isCombo(node) || !node.validity || node.validity.valid);
@@ -616,6 +685,7 @@
     }) {
       if (choices.has(node)) return choices.set(node, value, { check: check2 });
       if (combos.isCombo(node)) return combos.select(node, value, { check: check2 });
+      if (combos.isSchoolInput(node)) return combos.select(node, value, { check: check2, allowPlain: true });
       if (node.type === "radio") {
         const radio = controls().find((other) => sameRadioGroup(node, other) && (other.value === value || combos.matches(node, label(other), value)));
         if (!radio) throw Error("Choose one of the available answers.");
@@ -673,7 +743,8 @@
             continue;
           }
           check(runId);
-          if (!node.isConnected || hasValue(node) || node.type === "radio" && controls().some((other) => sameRadioGroup(node, other) && other.checked) || combos.isCombo(node) && normalize(node.value)) continue;
+          const schoolQuery = combos.isSchoolInput(node) && normalize(node.value) === normalize(profileFieldAnswer(node, profile, fieldLabel(node)));
+          if (!node.isConnected || hasValue(node) && !schoolQuery || node.type === "radio" && controls().some((other) => sameRadioGroup(node, other) && other.checked)) continue;
           const documentField = /cover.?letter/i.test(label(node)) || node.type === "file" && /resume|\bcv\b/i.test(label(node));
           if (Array.isArray(message.selectedIds) && !message.selectedIds.includes(key(node)) && !documentField) continue;
           if (node.type === "file") {

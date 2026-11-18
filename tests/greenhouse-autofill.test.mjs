@@ -49,7 +49,7 @@ test('Greenhouse dropdown search text is pending until a real option is selected
   const f=greenhouse(t);await f.form.request({action:'bind',runId:'greenhouse'});
   f.input.value='United';let state=await f.form.request({action:'scan',runId:'greenhouse'}),country=state.fields.find(field=>field.label==='Country');
   assert.equal(country.filled,false);assert.equal(country.answer,'');
-  await f.form.request({action:'fill',runId:'greenhouse',profile:f.profile});assert.equal(f.input.value,'United','Autofill preserves an unfinished user search');
+  await f.form.request({action:'fill',runId:'greenhouse',profile:f.profile});assert.equal(f.country,'US','Autofill commits a matching option instead of leaving search text behind');
   state=await f.form.request({action:'answer',runId:'greenhouse',fieldId:country.id,label:country.label,answer:'Canada'});
   assert.equal(f.country,'CA');assert.equal(state.fields.find(field=>field.label==='Country').filled,true);
   state=await f.form.request({action:'fill',runId:'greenhouse',profile:f.profile});assert.equal(f.country,'CA','Existing selections are preserved');
